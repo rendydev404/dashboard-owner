@@ -105,7 +105,7 @@ function Log({ owner }: { owner: boolean }) {
               <span className="absolute -left-[25px] top-4 size-2.5 rounded-full border-2 border-card bg-accent" />
               <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-[13px]">
                 <span className={cx("pill", alc)}>{al}</span>
-                <b className="font-semibold">{a.campaignName ?? (a.action === "update_rule" ? `${p.field}: ${p.previous ?? "—"} → ${p.value}` : "Semua kampanye")}</b>
+                <b className="font-semibold">{a.campaignName ?? (a.action === "update_rule" ? `${p.field}: ${p.previous ?? "—"} → ${p.value}` : a.action === "launch" ? p.plan?.campaignName : "Semua kampanye")}</b>
                 <span className={cx("pill", stc)}>{st}</span>
               </div>
               <p className="mt-0.5 text-[12px] text-muted">

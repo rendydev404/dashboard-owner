@@ -3,6 +3,10 @@ import { rp, type BotAction } from "@iklan/shared";
 import { actionsApi, refreshData, ApiError } from "./api";
 import { confirmDialog, toast } from "../components/ui";
 
+export const LAUNCH_GOAL: Record<string, string> = {
+  sales: "Penjualan (pixel PURCHASE)", leads_website: "Prospek website (pixel LEAD)", leads_whatsapp: "Chat WhatsApp", traffic: "Kunjungan landing page",
+};
+
 export function actionSummary(a: BotAction) {
   const p = a.params as any;
   if (a.action === "pause") return { title: "Pause kampanye?", verb: "Pause", detail: `Status: Aktif → Jeda` };
@@ -12,6 +16,10 @@ export function actionSummary(a: BotAction) {
     return { title: `Naikkan budget ${p.pct}%?`, verb: "Naikkan", detail: `Budget harian: ${rp(p.before?.dailyBudget ?? 0)} → ${rp(p.after?.dailyBudget ?? 0)}` };
   }
   if (a.action === "update_rule") return { title: "Ubah aturan", verb: "Ubah", detail: `${p.field}: ${p.previous ?? "—"} → ${p.value}` };
+  if (a.action === "launch") {
+    const plan = p.plan ?? {};
+    return { title: "Luncurkan kampanye baru?", verb: "Luncurkan", detail: `${plan.campaignName} · ${rp(plan.dailyBudget ?? 0)}/hari · ${LAUNCH_GOAL[plan.objective] ?? plan.objective}` };
+  }
   return { title: a.action, verb: a.action, detail: "" };
 }
 

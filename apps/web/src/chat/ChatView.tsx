@@ -8,6 +8,7 @@ import { accLabel } from "../components/pickers";
 import { toast, cx } from "../components/ui";
 import { Markdown } from "./Markdown";
 import { Widget } from "./Widgets";
+import { LaunchPlan } from "./LaunchPlan";
 import { useChat, send, greet, updateAction, resetChat, stopChat, type Msg } from "./store";
 
 const CHIPS = ["Ringkasan performa minggu ini", "Rekomendasi kampanye", "Kampanye paling boros?", "Jam paling cuan?", "Produk terlaris bulan ini", "Laba rugi bulan lalu"];
@@ -32,13 +33,17 @@ function ActionCard({ action }: { action: BotAction }) {
   return (
     <div className="rounded-xl border border-line bg-card p-3 text-[13px]">
       <p className="flex items-center gap-1.5 font-semibold"><Zap size={14} className="text-accent" /> {s.title.replace("?", "")}</p>
-      <p className="mt-1 font-medium">{action.campaignName}</p>
-      <p className="text-[12px] text-muted">{action.accountName}</p>
-      <p className="mt-1.5 whitespace-pre-line rounded-lg bg-bg px-2.5 py-1.5 text-[12.5px]">{s.detail}</p>
+      <p className="mt-1 font-medium">{action.campaignName ?? (p.plan?.campaignName as string | undefined)}</p>
+      {action.action === "launch" ? <LaunchPlan action={action} /> : (
+        <>
+          <p className="text-[12px] text-muted">{action.accountName}</p>
+          <p className="mt-1.5 whitespace-pre-line rounded-lg bg-bg px-2.5 py-1.5 text-[12.5px]">{s.detail}</p>
+        </>
+      )}
       {p.demo && <p className="mt-1 text-[11.5px] text-muted">Mode demo: hanya tersimpan di dashboard.</p>}
       {action.status === "pending" && !expired ? (
         <div className="mt-2.5 flex gap-2">
-          <button className="btn btn-primary h-9 min-h-0 flex-1" disabled={busy} onClick={() => run("confirm")}>Ya, eksekusi</button>
+          <button className="btn btn-primary h-9 min-h-0 flex-1" disabled={busy} onClick={() => run("confirm")}>{busy && action.action === "launch" ? "Membuat iklan…" : "Ya, eksekusi"}</button>
           <button className="btn h-9 min-h-0" disabled={busy} onClick={() => run("cancel")}>Batal</button>
         </div>
       ) : (
@@ -47,7 +52,7 @@ function ActionCard({ action }: { action: BotAction }) {
             {action.status === "executed" ? <span className="inline-flex items-center gap-1"><Check size={13} /> Dieksekusi</span>
               : action.status === "failed" ? `Gagal: ${action.error}` : expired ? "Kedaluwarsa" : action.status === "reverted" ? "Dibalikkan" : "Dibatalkan"}
           </span>
-          {action.status === "executed" && !p.demo && <button className="inline-flex items-center gap-1 font-semibold text-accent" disabled={busy} onClick={() => run("revert")}><Undo2 size={13} /> Batalkan aksi</button>}
+          {action.status === "executed" && !p.demo && <button className="inline-flex items-center gap-1 font-semibold text-accent" disabled={busy} onClick={() => run("revert")}><Undo2 size={13} /> {action.action === "launch" ? "Pause kampanye ini" : "Batalkan aksi"}</button>}
         </div>
       )}
     </div>

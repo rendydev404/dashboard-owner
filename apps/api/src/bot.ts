@@ -8,7 +8,8 @@ import { env, aiConfigured, aiMode } from "./env";
 import { sql, bumpDataVersion } from "./db";
 import { loadConfig, resolveRange, resolveScope, type Config } from "./scope";
 import * as Q from "./queries";
-import { createCampaignAction, findCampaigns, logRuleChange, type CampaignAction } from "./actions";
+import { createCampaignAction, createLaunchAction, findCampaigns, logRuleChange, type CampaignAction } from "./actions";
+import { launchContext } from "./meta/launch";
 import { errMsg, log } from "./log";
 import { summaryWidgets, campaignsWidget, hourlyWidget, productsWidget, plWidget } from "./chat-widgets";
 import { openChatSession, closeChatSession } from "./chat-sessions";
@@ -95,6 +96,64 @@ export const TOOLS: Anthropic.Tool[] = [
         reason: { type: "string" },
       },
       required: ["action"],
+    },
+  },
+  {
+    name: "list_ad_accounts",
+    description: "Daftar akun iklan di dashboard (ID, nama, lini). WAJIB dipakai sebelum membuat iklan baru untuk MENANYAKAN ke user akun mana yang dipakai.",
+    input_schema: { type: "object", properties: {} },
+  },
+  {
+    name: "get_launch_context",
+    description:
+      "Bahan merancang iklan baru di satu akun: Page & Instagram yang bisa dipakai, pixel/dataset, kreatif yang sudah ada (bisa dipakai ulang), " +
+      "kampanye dengan spend terbesar 30 hari (+ROAS), produk & link, minimal/maksimal budget harian. Panggil setelah user memilih akun.",
+    input_schema: { type: "object", properties: { account_id: { type: "string" } }, required: ["account_id"] },
+  },
+  {
+    name: "propose_launch",
+    description:
+      "USULKAN kampanye baru (kampanye CBO → ad set Advantage+ → kreatif → iklan). TIDAK membuat apa pun di Meta: tool ini hanya menampilkan " +
+      "kartu rencana untuk dikonfirmasi user. Setelah user menekan 'Ya, eksekusi', sistem membuat semuanya sebagai draft lalu menayangkannya. " +
+      "Hanya panggil setelah user memilih akun dan menyebut/menyetujui budget harian, produk/tujuan, dan kreatif.",
+    input_schema: {
+      type: "object",
+      properties: {
+        accountId: { type: "string", description: "ID akun yang DIPILIH USER" },
+        campaignName: { type: "string", description: "Format: [Tujuan] - [Produk/Angle] - [Tanggal], mis. 'Penjualan - Timelapse AI - 21 Okt'" },
+        objective: { type: "string", enum: ["sales", "leads_website", "leads_whatsapp", "traffic"], description: "sales = pembelian di website (pixel PURCHASE); leads_website = prospek di website (pixel LEAD); leads_whatsapp = chat WhatsApp; traffic = kunjungan landing page" },
+        dailyBudget: { type: "integer", description: "Budget harian kampanye dalam Rupiah (bulat). Harus sesuai yang user sebut/setujui." },
+        pageId: { type: "string" },
+        instagramUserId: { type: "string", description: "Opsional, supaya tayang di Instagram atas nama akun IG brand" },
+        pixelId: { type: "string", description: "Wajib untuk sales & leads_website" },
+        linkUrl: { type: "string", description: "Landing page/halaman produk (https://...). Wajib kecuali leads_whatsapp atau memakai kreatif/post yang sudah ada" },
+        targeting: {
+          type: "object",
+          properties: {
+            countries: { type: "array", items: { type: "string" }, description: "Kode negara ISO, default ['ID']" },
+            ageMin: { type: "integer" }, ageMax: { type: "integer" },
+            genders: { type: "string", enum: ["all", "male", "female"] },
+          },
+        },
+        creative: {
+          type: "object",
+          description:
+            "Salah satu: {type:'existing', creativeId} memakai kreatif yang sudah terbukti; {type:'post', objectStoryId:'PAGEID_POSTID'} boost postingan Page; " +
+            "{type:'new', imageUrl|imageHash|videoId, primaryText, headline, description?, cta} kreatif baru.",
+          properties: {
+            type: { type: "string", enum: ["existing", "post", "new"] },
+            creativeId: { type: "string" }, objectStoryId: { type: "string" },
+            imageHash: { type: "string" }, imageUrl: { type: "string" }, videoId: { type: "string" },
+            primaryText: { type: "string" }, headline: { type: "string" }, description: { type: "string" },
+            cta: { type: "string", enum: ["SHOP_NOW", "BUY_NOW", "LEARN_MORE", "SIGN_UP", "ORDER_NOW", "GET_OFFER", "CONTACT_US", "APPLY_NOW", "SUBSCRIBE", "WHATSAPP_MESSAGE"] },
+          },
+          required: ["type"],
+        },
+        adName: { type: "string" },
+        startNow: { type: "boolean", description: "true = langsung tayang setelah dikonfirmasi (default); false = simpan sebagai draft di Ads Manager" },
+        rationale: { type: "string", description: "Alasan singkat strategi (ditampilkan di kartu)" },
+      },
+      required: ["accountId", "campaignName", "objective", "dailyBudget", "pageId", "creative", "adName"],
     },
   },
 ];
@@ -189,6 +248,18 @@ export async function runTool(name: string, input: any, ctx: ChatContext, user: 
       emit({ type: "action_card", action });
       return { ok: true, pendingActionId: action.id, note: "Kartu konfirmasi sudah tampil. User harus menekan 'Ya, eksekusi'. Jangan bilang sudah dieksekusi." };
     }
+    case "list_ad_accounts":
+      return { accounts: cfg.accounts.filter((a) => a.active).map((a) => ({ id: a.id, name: a.name, line: LINES[a.line].label })) };
+    case "get_launch_context": {
+      if (user.role !== "owner") return { error: "Hanya owner yang boleh membuat iklan" };
+      return await launchContext(String(input.account_id ?? ""));
+    }
+    case "propose_launch": {
+      if (user.role !== "owner") return { error: "Hanya owner yang boleh membuat iklan" };
+      const action = await createLaunchAction(input, user.id, input.rationale);
+      emit({ type: "action_card", action });
+      return { ok: true, pendingActionId: action.id, note: "Kartu rencana sudah tampil. Iklan BELUM dibuat. Minta user memeriksa lalu menekan 'Ya, eksekusi'. Jangan bilang iklan sudah tayang." };
+    }
   }
   return { error: "Tool tidak dikenal" };
 }
@@ -200,7 +271,7 @@ function systemPrompt(cfg: Config) {
     const s = a.settings;
     return `- ${a.name} (ID ${a.id}, ${LINES[a.line].label}): target ROAS ${s.targetRoas}x, ${a.line === "jasa" ? `batas CPL ${rp(s.maxCpl ?? 0)}` : `batas CPA ${rp(s.maxCpa ?? 0)}`}, matikan setelah spend ${rp(s.killAfterSpend)}, scale +${s.scaleStepPct}%, PPN iklan ${s.adTaxPct}%`;
   }).join("\n");
-  return `Kamu "Bot Iklan", analis iklan Meta untuk owner bisnis Produk Digital AI (jualan di lynk.id) dan Jasa AI (closing manual).
+  return `Kamu "Bot Iklan", Meta Ads expert untuk owner bisnis Produk Digital AI (jualan di lynk.id) dan Jasa AI (closing manual).
 Gaya: Bahasa Indonesia santai (gw/lo), singkat, angka dulu baru penjelasan. Format uang seperti Rp1,2 jt / Rp450 rb.
 Format jawaban (markdown):
 - Buka dengan 1 kalimat kesimpulan yang **ditebalkan**.
@@ -215,6 +286,22 @@ Prinsip:
 - Rekomendasi: Matikan kalau spend ≥ batas spend dan CPA/CPL lewat batas; Scale kalau ROAS ≥ 1,3× target; Ganti kreatif kalau ROAS < target (digital) atau CPL lewat batas (jasa). Periode 1 hari = sinyal awal saja.
 - Untuk pause/aktifkan/scale, panggil propose_campaign_action. Itu hanya membuat kartu konfirmasi; JANGAN pernah bilang aksi sudah dijalankan. Minta user menekan tombol konfirmasi.
 - Kalau user minta pindah akun/periode, panggil set_view.
+Peran: kamu Meta Ads strategist senior (10+ tahun, spesialis direct response produk digital & jasa di Indonesia). Kamu berpikir dari data, tegas memberi rekomendasi, dan selalu menjelaskan "kenapa".
+
+Membuat iklan baru (WAJIB urut):
+1. Kalau user belum menyebut akun secara eksplisit, panggil list_ad_accounts lalu TANYA akun mana. Jangan memilih akun sendiri.
+2. Pastikan jelas: produk/jasa yang diiklankan, tujuan (penjualan / prospek website / chat WhatsApp / traffic), budget HARIAN dalam Rupiah, dan kreatif (pakai kreatif lama yang terbukti, boost postingan, atau gambar/video baru + copy). Kalau ada yang belum jelas, tanya singkat dalam satu pesan. Jangan mengarang budget.
+3. Panggil get_launch_context untuk akun itu. Pakai Page, IG, dan pixel dari sana; jangan mengarang ID.
+4. Susun rencana terbaik, jelaskan singkat (tujuan & event optimasi, budget, audiens, kreatif & copy), lalu panggil propose_launch. Sistem menampilkan kartu konfirmasi; iklan baru dibuat & tayang setelah user menekan "Ya, eksekusi".
+
+Best practice yang kamu pegang:
+- Struktur sederhana: 1 kampanye CBO, 1 ad set, 1–3 iklan. Hindari memecah budget kecil ke banyak ad set.
+- Targeting broad + Advantage+ Audience & Advantage+ placements (default). Negara ID, usia 18–65 kecuali produk jelas butuh rentang lain. Jangan mengarang ID interest.
+- Event optimasi sedekat mungkin ke uang: produk digital → sales (PURCHASE); jasa → leads_website (LEAD) atau leads_whatsapp kalau closing lewat chat.
+- Budget: idealnya ≥ 2–3× target CPA per hari supaya bisa keluar dari learning phase (~50 konversi/minggu). Kalau budget user terlalu kecil, sampaikan risikonya tapi tetap ikuti keputusan user.
+- Kreatif: utamakan kreatif/angle yang terbukti (ROAS/CPA terbaik di get_launch_context). Copy: hook kuat di baris pertama, manfaat konkret, bukti/sosial proof, CTA jelas; headline ≤ 40 karakter. Sesuaikan bahasa santai Indonesia.
+- Setelah tayang: jangan diubah 3–5 hari pertama (learning). Evaluasi pakai aturan akun (target ROAS, batas CPA/CPL); scale bertahap maks. 20–30% per 2–3 hari.
+- Patuh kebijakan iklan Meta: tanpa klaim berlebihan/jaminan hasil, tanpa menyebut atribut personal ("Kamu yang gemuk…").
 
 Aturan akun saat ini:
 ${rules || "- (belum ada akun iklan)"}`;

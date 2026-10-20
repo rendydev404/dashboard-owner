@@ -9,6 +9,8 @@ import { fetchActiveAdsets, fetchCampaignState, setDailyBudget, setStatus } from
 import { emit } from "./events";
 import { errMsg, log } from "./log";
 import { loadConfig } from "./scope";
+import { executeLaunch, pauseLaunched, validateLaunchPlan, type LaunchPlan, type LaunchResult } from "./meta/launch";
+import { runSync } from "./meta/sync";
 
 export type CampaignAction = "pause" | "activate" | "scale";
 const MAX_SCALE_PCT = 50;
@@ -116,6 +118,19 @@ export async function createCampaignAction(opts: {
   return getAction(Number(row.id));
 }
 
+/** Usulan peluncuran kampanye baru dari bot. Tidak menyentuh Meta sampai user mengonfirmasi. */
+export async function createLaunchAction(raw: unknown, userId: number, reason?: string): Promise<BotAction> {
+  const { plan, accountName, minDaily, maxDaily } = await validateLaunchPlan(raw);
+  const params = { plan, accountName, limits: { minDaily, maxDaily } };
+  const [row] = await sql`
+    INSERT INTO bot_actions (account_id, action, params, source, status, reason, requested_by, expires_at)
+    VALUES (${plan.accountId}, 'launch', ${sql.json(params as any)}, 'chat', 'pending', ${reason ?? plan.rationale ?? null}, ${userId},
+            now() + make_interval(mins => ${LAUNCH_EXPIRE_MIN}))
+    RETURNING id`;
+  return getAction(Number(row.id));
+}
+const LAUNCH_EXPIRE_MIN = 30;
+
 /** Kalimat ringkas untuk kartu konfirmasi & log. */
 export function describeAction(a: BotAction): string {
   const p = a.params as unknown as Params;
@@ -126,6 +141,7 @@ export function describeAction(a: BotAction): string {
     return `Naikkan budget ${a.campaignName} dari ${rp(p.before.dailyBudget ?? 0)} ke ${rp(p.after.dailyBudget ?? 0)}/hari`;
   }
   if (a.action === "update_rule") return `Ubah aturan ${p.field} jadi ${p.value}`;
+  if (a.action === "launch") return `Luncurkan kampanye ${(a.params as any).plan?.campaignName}`;
   return a.action;
 }
 
@@ -156,11 +172,12 @@ export async function confirmAction(id: number): Promise<BotAction> {
   const [claimed] = await sql`
     UPDATE bot_actions SET expires_at = NULL
     WHERE id = ${id} AND status = 'pending' AND expires_at > now()
-    RETURNING id, campaign_id, action, params`;
+    RETURNING id, account_id, campaign_id, action, params`;
   if (!claimed) {
     const cur = await getAction(id);
     throw new HTTPException(409, { message: cur.status === "expired" ? "Konfirmasi sudah kedaluwarsa, minta ulang ke bot" : "Aksi ini sudah diproses" });
   }
+  if (claimed.action === "launch") return confirmLaunch(id, claimed.account_id, claimed.params);
   try {
     const resp = await apply(claimed.campaign_id, claimed.params, "after");
     await sql`UPDATE bot_actions SET status = 'executed', executed_at = now(), meta_response = ${sql.json(resp as any)} WHERE id = ${id}`;
@@ -175,6 +192,31 @@ export async function confirmAction(id: number): Promise<BotAction> {
   return a;
 }
 
+async function confirmLaunch(id: number, accountId: string, params: { plan: LaunchPlan }): Promise<BotAction> {
+  const res: LaunchResult = await executeLaunch(params.plan);
+  const ok = res.steps.length > 0 && res.steps.every((s) => s.ok);
+  const failed = res.steps.find((s) => !s.ok);
+  // Kampanye baru dimasukkan ke tabel lokal supaya kartu & log bisa menautkannya sebelum sync berikutnya.
+  if (res.campaignId) {
+    await sql`
+      INSERT INTO campaigns (id, account_id, name, status, effective_status, daily_budget, is_cbo, updated_at)
+      VALUES (${res.campaignId}, ${accountId}, ${params.plan.campaignName}, ${res.published ? "ACTIVE" : "PAUSED"}, ${res.published ? "ACTIVE" : "PAUSED"},
+              ${params.plan.dailyBudget}, true, now())
+      ON CONFLICT (id) DO NOTHING`;
+  }
+  await sql`
+    UPDATE bot_actions SET status = ${ok ? "executed" : "failed"}::action_status, executed_at = ${ok ? new Date() : null}, campaign_id = ${res.campaignId},
+      params = params || ${sql.json({ result: res } as any)}, meta_response = ${sql.json(res as any)},
+      error = ${failed ? `Gagal di langkah ${failed.step}: ${failed.note ?? "error dari Meta"}. Objek yang sudah dibuat tetap draft/jeda (tanpa biaya), cek di Ads Manager.` : null}
+    WHERE id = ${id}`;
+  log[ok ? "info" : "error"]("peluncuran kampanye", { id, ok, campaign: res.campaignId, published: res.published, failedStep: failed?.step });
+  if (res.published) void runSync("manual", accountId).catch(() => {});
+  await bumpDataVersion();
+  const a = await getAction(id);
+  emit({ type: "action", id, status: a.status });
+  return a;
+}
+
 export async function cancelAction(id: number): Promise<BotAction> {
   await sql`UPDATE bot_actions SET status = 'cancelled', expires_at = NULL WHERE id = ${id} AND status = 'pending'`;
   return getAction(id);
@@ -182,11 +224,15 @@ export async function cancelAction(id: number): Promise<BotAction> {
 
 export async function revertAction(id: number): Promise<BotAction> {
   const [r] = await sql`
-    UPDATE bot_actions SET status = 'reverted' WHERE id = ${id} AND status = 'executed' AND action IN ('pause','activate','scale')
-    RETURNING campaign_id, params`;
+    UPDATE bot_actions SET status = 'reverted' WHERE id = ${id} AND status = 'executed' AND action IN ('pause','activate','scale','launch')
+    RETURNING account_id, campaign_id, action, params`;
   if (!r) throw new HTTPException(409, { message: "Hanya aksi yang sudah dieksekusi yang bisa dibatalkan" });
   try {
-    await apply(r.campaign_id, r.params, "before");
+    if (r.action === "launch") {
+      // Membatalkan peluncuran = menjeda kampanye baru (tidak menghapus data/riwayat di Meta).
+      await pauseLaunched(r.account_id, r.campaign_id);
+      await sql`UPDATE campaigns SET status = 'PAUSED', effective_status = 'PAUSED', updated_at = now() WHERE id = ${r.campaign_id}`;
+    } else await apply(r.campaign_id, r.params, "before");
   } catch (e) {
     await sql`UPDATE bot_actions SET status = 'executed', error = ${"Gagal membatalkan: " + errMsg(e)} WHERE id = ${id}`;
     throw new HTTPException(502, { message: "Gagal membatalkan di Meta: " + errMsg(e) });
