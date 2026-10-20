@@ -82,4 +82,5 @@ jobs:
             echo "Secret Coolify belum diisi, deploy dilewati."
             exit 0
           fi
-          curl -fsS --max-time 30 -H "Authorization: Bearer $COOLIFY_TOKEN" "$COOLIFY_WEBHOOK"
+          # Coolify v4.4+: endpoint deploy wajib POST.
+          curl -fsS --max-time 30 -X POST -H "Authorization: Bearer $COOLIFY_TOKEN" "$COOLIFY_WEBHOOK"
