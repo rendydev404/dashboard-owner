@@ -14,6 +14,7 @@ const PerJam = lazy(() => import("./pages/PerJam"));
 const Produk = lazy(() => import("./pages/Produk"));
 const LabaRugi = lazy(() => import("./pages/LabaRugi"));
 const BotPage = lazy(() => import("./pages/BotPage"));
+const ChatPage = lazy(() => import("./pages/ChatPage"));
 const Pengaturan = lazy(() => import("./pages/Pengaturan"));
 const ChatPanel = lazy(() => import("./chat/ChatPanel"));
 const prefetch = () => { void import("./pages/Kampanye"); void import("./pages/LabaRugi"); void import("./chat/ChatPanel"); };
@@ -38,7 +39,7 @@ function useServerEvents(enabled: boolean) {
 
 function Page() {
   const v = useView();
-  const map = { ringkasan: Ringkasan, kampanye: Kampanye, jam: PerJam, produk: Produk, labarugi: LabaRugi, bot: BotPage, pengaturan: Pengaturan };
+  const map = { ringkasan: Ringkasan, kampanye: Kampanye, jam: PerJam, produk: Produk, labarugi: LabaRugi, chat: ChatPage, bot: BotPage, pengaturan: Pengaturan };
   const C = map[v.tab];
   return <Suspense fallback={<div className="card p-5"><Skeleton className="h-[360px]" /></div>}><C /></Suspense>;
 }

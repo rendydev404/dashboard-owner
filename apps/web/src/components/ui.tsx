@@ -153,24 +153,3 @@ export function useMediaQuery(q: string) {
 }
 
 /** Render ringan untuk teks bot: **tebal**, daftar "- ", baris baru. Tanpa HTML mentah (aman dari XSS). */
-export function Markdownish({ text }: { text: string }) {
-  const blocks = text.trim().split(/\n{2,}/);
-  const inline = (s: string) => s.split(/(\*\*[^*]+\*\*)/g).map((part, i) =>
-    part.startsWith("**") && part.endsWith("**") ? <strong key={i}>{part.slice(2, -2)}</strong> : <span key={i}>{part}</span>);
-  return (
-    <div className="md">
-      {blocks.map((b, i) => {
-        const lines = b.split("\n");
-        const out: ReactNode[] = [];
-        let list: string[] = [];
-        const flush = () => { if (list.length) { out.push(<ul key={out.length}>{list.map((l, j) => <li key={j}>{inline(l)}</li>)}</ul>); list = []; } };
-        for (const l of lines) {
-          if (/^\s*[-•*]\s+/.test(l)) list.push(l.replace(/^\s*[-•*]\s+/, ""));
-          else { flush(); if (l.trim()) out.push(<p key={out.length}>{inline(l)}</p>); }
-        }
-        flush();
-        return <div key={i} className={i ? "mt-2" : ""}>{out}</div>;
-      })}
-    </div>
-  );
-}

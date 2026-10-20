@@ -132,6 +132,28 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .md ul { margin: 4px 0 0 18px; list-style: disc; }
 .md strong { font-weight: 650; }
 
+/* Markdown jawaban bot (chat/Markdown.tsx) */
+.md-chat { overflow-wrap: anywhere; }
+.md-chat > * + * { margin-top: 8px; }
+.md-chat h1, .md-chat h2, .md-chat h3, .md-chat h4 { font-weight: 650; line-height: 1.3; margin-top: 14px; }
+.md-chat h1 { font-size: 1.15em; } .md-chat h2 { font-size: 1.08em; } .md-chat h3, .md-chat h4 { font-size: 1em; }
+.md-chat > :first-child { margin-top: 0; }
+.md-chat strong { font-weight: 650; }
+.md-chat ul, .md-chat ol { padding-left: 20px; }
+.md-chat ul { list-style: disc; } .md-chat ol { list-style: decimal; }
+.md-chat li + li { margin-top: 3px; }
+.md-chat li > ul, .md-chat li > ol { margin-top: 3px; }
+.md-chat a { color: var(--accent); text-decoration: underline; text-underline-offset: 2px; }
+.md-chat code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: .88em; background: var(--hover); border-radius: 5px; padding: 1px 5px; }
+.md-chat pre { background: var(--hover); border-radius: 10px; padding: 10px 12px; overflow-x: auto; }
+.md-chat pre code { background: none; padding: 0; }
+.md-chat blockquote { border-left: 3px solid var(--line-strong); padding-left: 10px; color: var(--muted); }
+.md-chat hr { border: 0; border-top: 1px solid var(--line); margin: 12px 0; }
+.md-chat table { display: block; max-width: 100%; overflow-x: auto; border-collapse: collapse; font-size: .93em; }
+.md-chat th, .md-chat td { border: 1px solid var(--line); padding: 5px 9px; text-align: left; white-space: nowrap; }
+.md-chat th { background: var(--hover); font-weight: 600; }
+.md-chat td { font-variant-numeric: tabular-nums; }
+
 @media print {
   aside, nav, header .no-print, .no-print, .chat-fab { display: none !important; }
   body { background: #fff; }

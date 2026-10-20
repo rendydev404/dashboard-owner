@@ -14,7 +14,9 @@
     "@iklan/shared": "workspace:*",
     "@tanstack/react-query": "^5.62.8",
     "chart.js": "^4.4.7",
+    "dompurify": "3.2.4",
     "lucide-react": "^0.468.0",
+    "marked": "12.0.2",
     "react": "^18.3.1",
     "react-dom": "^18.3.1"
   },

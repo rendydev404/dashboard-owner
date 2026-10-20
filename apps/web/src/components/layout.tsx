@@ -21,10 +21,11 @@ const NAV: { tab: Tab; label: string; icon: typeof LayoutGrid }[] = [
   { tab: "jam", label: "Per Jam", icon: Clock3 },
   { tab: "produk", label: "Produk & Jasa", icon: Package },
   { tab: "labarugi", label: "Laba Rugi", icon: Wallet },
+  { tab: "chat", label: "Chat AI", icon: MessageCircle },
   { tab: "bot", label: "Bot AI", icon: Bot },
 ];
 export const TAB_TITLE: Record<Tab, string> = {
-  ringkasan: "Ringkasan", kampanye: "Kampanye", jam: "Per Jam", produk: "Produk & Jasa", labarugi: "Laba Rugi", bot: "Bot AI", pengaturan: "Pengaturan",
+  ringkasan: "Ringkasan", kampanye: "Kampanye", jam: "Per Jam", produk: "Produk & Jasa", labarugi: "Laba Rugi", chat: "Chat AI", bot: "Bot AI", pengaturan: "Pengaturan",
 };
 
 async function logout() {
@@ -198,28 +199,28 @@ export function Shell({ boot, children }: { boot: Bootstrap; children: ReactNode
       </header>
 
       <main className="mx-auto max-w-[1320px] px-4 pb-32 pt-3 md:px-8 md:pb-16">
-        <SyncBanner boot={boot} />
-        {!(v.tab === "ringkasan" && v.sub === "lynk") && <LynkBanner boot={boot} />}
+        {v.tab !== "chat" && <SyncBanner boot={boot} />}
+        {v.tab !== "chat" && !(v.tab === "ringkasan" && v.sub === "lynk") && <LynkBanner boot={boot} />}
         {children}
-        <p className="mt-10 text-center text-[12px] text-muted">Laporan internal · jangan dibagikan · {v.from && fmtRange(v.from, v.to)}</p>
+        {v.tab !== "chat" && <p className="mt-10 text-center text-[12px] text-muted">Laporan internal · jangan dibagikan · {v.from && fmtRange(v.from, v.to)}</p>}
       </main>
 
       {/* Bottom nav (HP) */}
       <nav className="fixed inset-x-0 bottom-0 z-30 border-t border-line bg-panel/95 pb-[env(safe-area-inset-bottom)] backdrop-blur md:hidden" aria-label="Menu">
         <div className="grid grid-cols-5">
-          {([["ringkasan", "Ringkasan", LayoutGrid], ["kampanye", "Kampanye", Megaphone], ["labarugi", "Laba Rugi", Wallet], ["bot", "Bot", Bot]] as const).map(([t, l, Icon]) => (
+          {([["ringkasan", "Ringkasan", LayoutGrid], ["kampanye", "Kampanye", Megaphone], ["labarugi", "Laba Rugi", Wallet], ["chat", "Chat", MessageCircle]] as const).map(([t, l, Icon]) => (
             <button key={t} onClick={() => setView({ tab: t })} className={cx("flex h-[58px] flex-col items-center justify-center gap-1 text-[11px]", v.tab === t ? "font-semibold text-accent" : "text-muted")}>
               <Icon size={20} strokeWidth={v.tab === t ? 2.3 : 1.8} />{l}
             </button>
           ))}
-          <button onClick={() => setMore(true)} className={cx("flex h-[58px] flex-col items-center justify-center gap-1 text-[11px]", ["jam", "produk", "pengaturan"].includes(v.tab) ? "font-semibold text-accent" : "text-muted")}>
+          <button onClick={() => setMore(true)} className={cx("flex h-[58px] flex-col items-center justify-center gap-1 text-[11px]", ["jam", "produk", "bot", "pengaturan"].includes(v.tab) ? "font-semibold text-accent" : "text-muted")}>
             <MoreHorizontal size={20} />Lainnya
           </button>
         </div>
       </nav>
       <Modal open={more} onClose={() => setMore(false)} title="Menu lainnya">
         <div className="space-y-1">
-          {([["jam", "Per Jam", Clock3], ["produk", "Produk & Jasa", Package], ["pengaturan", "Pengaturan", Settings]] as const).map(([t, l, Icon]) => (
+          {([["jam", "Per Jam", Clock3], ["produk", "Produk & Jasa", Package], ["bot", "Bot AI", Bot], ["pengaturan", "Pengaturan", Settings]] as const).map(([t, l, Icon]) => (
             <NavItem key={t} tab={t} label={l} icon={Icon} onClick={() => { setView({ tab: t }); setMore(false); }} />
           ))}
           <a href={exportUrl} className="flex h-10 items-center gap-3 rounded-[10px] px-3 text-[14px] hover:bg-hover"><Download size={18} /> Unduh CSV kampanye</a>
@@ -227,9 +228,9 @@ export function Shell({ boot, children }: { boot: Bootstrap; children: ReactNode
         </div>
       </Modal>
 
-      <button onClick={() => setChatOpen(true)} className="chat-fab no-print fixed bottom-[76px] right-4 z-30 flex h-12 items-center gap-2 rounded-full bg-accent px-4 font-semibold text-accent-ink shadow-pop md:bottom-6 md:right-6 md:px-5" aria-label="Buka chat bot">
+      {v.tab !== "chat" && <button onClick={() => setChatOpen(true)} className="chat-fab no-print fixed bottom-[76px] right-4 z-30 flex h-12 items-center gap-2 rounded-full bg-accent px-4 font-semibold text-accent-ink shadow-pop md:bottom-6 md:right-6 md:px-5" aria-label="Buka chat bot">
         <MessageCircle size={19} /> <span className="hidden sm:inline">Tanya bot</span>
-      </button>
+      </button>}
     </div>
   );
 }

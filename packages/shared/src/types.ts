@@ -136,9 +136,29 @@ export type ServerEvent =
   | { type: "sync"; status: string }
   | { type: "action"; id: number; status: string };
 
+/** Format angka di widget chat. */
+export type WidgetFormat = "rp" | "x" | "pct" | "num";
+export type WidgetTone = "good" | "bad" | "warn" | "neutral";
+
+/** Widget data di chat. Selalu dibangun dari hasil tool (angka pasti), bukan ditulis model. */
+export type ChatWidget =
+  | {
+      kind: "kpis"; title: string; subtitle?: string;
+      items: { label: string; value: number | null; format: WidgetFormat; prev?: number | null; upIsGood?: boolean; hint?: string }[];
+    }
+  | {
+      kind: "progress"; title: string; subtitle?: string;
+      items: { label: string; value: number; target: number; format: WidgetFormat; hint?: string }[];
+    }
+  | {
+      kind: "bars"; title: string; subtitle?: string; format: WidgetFormat;
+      items: { label: string; value: number; sub?: string; tone?: WidgetTone }[];
+    };
+
 /** Event stream dari /api/chat. */
 export type ChatEvent =
   | { type: "text"; text: string }
+  | { type: "widget"; widget: ChatWidget }
   | { type: "view"; acc?: string; preset?: RangePreset; from?: string; to?: string }
   | { type: "action_card"; action: BotAction }
   | { type: "rule_changed"; accountId: string }

@@ -26,6 +26,7 @@ import { fbAds, lynkStats } from "./queries-tabs";
 import { handleLynkWebhook } from "./lynk";
 import { createCampaignAction, confirmAction, cancelAction, revertAction, listActions, getAction } from "./actions";
 import { handleChat, updateRule } from "./bot";
+import { mcpHandler } from "./mcp-server";
 import { runSync, lastMetaError, fetchAccountInfo } from "./meta/sync";
 import { subscribe } from "./events";
 import { log, errMsg } from "./log";
@@ -408,6 +409,10 @@ api.get("/events", (c) =>
   }));
 
 app.route("/api", api);
+
+// Tool dashboard untuk Claude Code di host (lihat mcp-server.ts). Tidak lewat /api: tanpa cookie, pakai token sesi chat.
+app.post("/internal/mcp", mcpHandler);
+app.on(["GET", "DELETE"], "/internal/mcp", (c) => c.body(null, 405));
 app.all("/api/*", (c) => c.json({ error: "Endpoint tidak ada" }, 404));
 
 /* ---------------------------------------------------------------- web statis */

@@ -68,6 +68,11 @@ E2E memakai Edge/Chrome yang sudah terpasang (`PW_CHANNEL=chrome` untuk Chrome),
    Timer tiap 10 menit menyalin HANYA token Meta ke `/opt/ads-dashboard/meta-token.json` (0400, uid 1000). Di Coolify: bind mount **direktori** `/opt/ads-dashboard` → `/run/meta` (bukan file, supaya penggantian atomik terlihat di container) dan env `META_MCP_CRED=/run/meta/meta-token.json`. Token berlaku ±60 hari; login ulang `/mcp` sebelum habis (dashboard memberi peringatan 7 hari sebelumnya).
    - VPS lama (76.13.193.138) punya login `claude-ads` sendiri untuk `ads-snapshot`, `ads-report-web`, dan `ads-builder`; tidak bergantung pada dashboard.
    - **Resource:** app 384 MB / 0,5 CPU, Postgres 256 MB / 0,5 CPU (`max_connections=20`, `shared_buffers=64MB`). Sync `recent` (2 hari) tiap `SYNC_INTERVAL_MIN`=15 mnt (120 mnt di jam 00–06), `nightly` 28 hari jam 02, backfill 180 hari sekali per akun baru. Lynk realtime lewat webhook + SSE.
+3b. **Bot AI lewat Claude Code (VPS 3).** Bot memakai login Claude user `claude-ads` (langganan), tanpa API key.
+   - `deploy/claude-bridge.mjs` (systemd `claude-bridge`, user claude-ads) listen di gateway Docker `10.0.1.1:8790`, wajib `BRIDGE_TOKEN` (`/etc/claude-bridge.env`, 0600). Tiap pertanyaan menjalankan `claude -p` **tanpa tool bawaan** (`--tools ""`, tanpa Bash/file/web), maks. 2 proses bersamaan, timeout 170 dtk, proses dihentikan bila user menutup chat.
+   - Tool bot = server MCP internal dashboard `/internal/mcp` dengan token sekali pakai per pesan (`chat-sessions.ts`); Caddy menolak `/internal/*` dari internet.
+   - Env Coolify: `CLAUDE_BRIDGE_URL=http://10.0.1.1:8790`, `CLAUDE_BRIDGE_TOKEN` (sama dengan BRIDGE_TOKEN), `CLAUDE_MCP_URL=http://127.0.0.1:3210/internal/mcp`. Tanpa env ini bot memakai `ANTHROPIC_API_KEY` (kalau ada) atau mode aturan.
+   - Widget di chat (kartu KPI, progress ROAS vs impas, bar kampanye/jam/produk) dibangun dari hasil tool (`chat-widgets.ts`), bukan ditulis model.
 4. **Deploy.** Migrasi berjalan otomatis saat boot. Buat akun owner dari terminal container Coolify:
    ```bash
    node dist/cli/user-create.js owner@domain.com "Nama Owner" owner

@@ -1,0 +1,26 @@
+[Unit]
+Description=Jembatan Claude Code untuk bot dashboard owner (user claude-ads)
+After=network-online.target docker.service
+Wants=network-online.target
+
+[Service]
+User=claude-ads
+Group=claude-ads
+Environment=HOME=/var/lib/claude-ads
+Environment=PATH=/var/lib/claude-ads/.local/bin:/usr/local/bin:/usr/bin:/bin
+# BRIDGE_TOKEN (wajib) dan opsi lain di file ini, mode 0600 milik root.
+EnvironmentFile=/etc/claude-bridge.env
+ExecStart=/usr/bin/node /usr/local/lib/claude-bridge.mjs
+Restart=on-failure
+RestartSec=5
+# Gateway jaringan Docker (10.0.1.1) baru ada setelah Docker jalan.
+ExecStartPre=/bin/sh -c 'for i in $(seq 1 30); do ip -4 addr | grep -q "inet 10.0.1.1/" && exit 0; sleep 2; done; exit 1'
+NoNewPrivileges=true
+ProtectSystem=strict
+ReadWritePaths=/var/lib/claude-ads
+PrivateTmp=true
+MemoryMax=1G
+Nice=5
+
+[Install]
+WantedBy=multi-user.target

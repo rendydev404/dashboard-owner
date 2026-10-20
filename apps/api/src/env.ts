@@ -17,6 +17,11 @@ const schema = z.object({
   LYNK_MERCHANT_KEY: z.string().optional(),
   ANTHROPIC_API_KEY: z.string().optional(),
   CLAUDE_MODEL: z.string().default("claude-sonnet-5-5"),
+  // Jembatan Claude Code di host (deploy/claude-bridge.mjs): bot memakai login Claude user claude-ads, tanpa API key.
+  CLAUDE_BRIDGE_URL: z.string().url().optional(),
+  CLAUDE_BRIDGE_TOKEN: z.string().min(24).optional(),
+  // URL tool dashboard (server MCP internal) dari sisi host tempat jembatan berjalan.
+  CLAUDE_MCP_URL: z.string().url().default("http://127.0.0.1:3210/internal/mcp"),
   SYNC_INTERVAL_MIN: z.coerce.number().default(30),
   SYNC_ENABLED: z.enum(["true", "false"]).default("true"),
   CHAT_RATE_PER_HOUR: z.coerce.number().default(60),
@@ -44,5 +49,8 @@ export function metaMode(): MetaMode {
   return mcp ? "mcp" : graph ? "graph" : "none";
 }
 export const metaConfigured = () => metaMode() !== "none";
-export const aiConfigured = () => !!env.ANTHROPIC_API_KEY;
+export type AiMode = "bridge" | "api" | "none";
+/** Jembatan Claude Code diutamakan (pakai langganan Claude di VPS), API key Anthropic sebagai cadangan. */
+export const aiMode = (): AiMode => (env.CLAUDE_BRIDGE_URL && env.CLAUDE_BRIDGE_TOKEN ? "bridge" : env.ANTHROPIC_API_KEY ? "api" : "none");
+export const aiConfigured = () => aiMode() !== "none";
 export const lynkConfigured = () => !!env.LYNK_MERCHANT_KEY;

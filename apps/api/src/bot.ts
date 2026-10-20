@@ -4,12 +4,14 @@ import Anthropic from "@anthropic-ai/sdk";
 import {
   type ChatEvent, type User, PRESETS, LINES, fmtRange, rp, rpk, dec, pct, nf,
 } from "@iklan/shared";
-import { env, aiConfigured } from "./env";
+import { env, aiConfigured, aiMode } from "./env";
 import { sql, bumpDataVersion } from "./db";
 import { loadConfig, resolveRange, resolveScope, type Config } from "./scope";
 import * as Q from "./queries";
 import { createCampaignAction, findCampaigns, logRuleChange, type CampaignAction } from "./actions";
 import { errMsg, log } from "./log";
+import { summaryWidgets, campaignsWidget, hourlyWidget, productsWidget, plWidget } from "./chat-widgets";
+import { openChatSession, closeChatSession } from "./chat-sessions";
 
 export interface ChatContext { acc: string; from: string; to: string }
 type Emit = (e: ChatEvent) => void;
@@ -38,7 +40,7 @@ const periodProps = {
 } as const;
 const accountProp = { type: "string", description: '"all", "digital", "jasa", atau ID akun. Kosongkan untuk akun yang sedang dibuka.' } as const;
 
-const TOOLS: Anthropic.Tool[] = [
+export const TOOLS: Anthropic.Tool[] = [
   {
     name: "get_summary",
     description: "KPI periode (laba bersih, omzet riil, spend, ROAS riil & impas, CPA, leads, CPL, closing rate, CTR) beserta periode pembanding.",
@@ -110,12 +112,13 @@ function slimKpis(k: any) {
   return Object.fromEntries(keys.map((x) => [x, typeof k[x] === "number" ? Math.round(k[x] * 1000) / 1000 : k[x]]));
 }
 
-async function runTool(name: string, input: any, ctx: ChatContext, user: User, emit: Emit): Promise<unknown> {
+export async function runTool(name: string, input: any, ctx: ChatContext, user: User, emit: Emit): Promise<unknown> {
   const cfg = await loadConfig();
   switch (name) {
     case "get_summary": {
       const { scope, r } = scopeAndRange(input, ctx, cfg);
       const s = await Q.summaryFor(scope, r, cfg);
+      summaryWidgets(label(scope, cfg) ?? "", fmtRange(r.from, r.to), fmtRange(r.prevFrom, r.prevTo), s.kpis, s.prev).forEach((widget) => emit({ type: "widget", widget }));
       return { scope: label(scope, cfg), period: fmtRange(r.from, r.to), compare: fmtRange(r.prevFrom, r.prevTo), now: slimKpis(s.kpis), previous: slimKpis(s.prev) };
     }
     case "get_campaigns": {
@@ -125,6 +128,8 @@ async function runTool(name: string, input: any, ctx: ChatContext, user: User, e
       if (input.sort === "roas_desc") rows.sort((a, b) => b.roas - a.roas);
       if (input.sort === "roas_asc") rows.sort((a, b) => (a.spend > 0 ? a.roas : 99) - (b.spend > 0 ? b.roas : 99));
       if (input.sort === "cpa_desc") rows.sort((a, b) => (b.cpa ?? 1e12) - (a.cpa ?? 1e12));
+      const cw = campaignsWidget(label(scope, cfg) ?? "", fmtRange(r.from, r.to), rows);
+      if (cw) emit({ type: "widget", widget: cw });
       return {
         scope: label(scope, cfg), period: fmtRange(r.from, r.to), singleDaySignal: r.days === 1,
         campaigns: rows.slice(0, Math.min(input.limit ?? 15, 30)).map((x) => ({
@@ -137,17 +142,22 @@ async function runTool(name: string, input: any, ctx: ChatContext, user: User, e
     case "get_hourly": {
       const { scope, r } = scopeAndRange(input, ctx, cfg);
       const h = await Q.hourly(scope, r);
+      const hw = hourlyWidget(h);
+      if (hw) emit({ type: "widget", widget: hw });
       const fmt = (x: any) => ({ hour: `${String(x.hour).padStart(2, "0")}:00`, spend: x.spend, results: x.results, costPerResult: x.cost && Math.round(x.cost) });
       return { metric: h.metric, best: h.best.map(fmt), worst: h.worst.map(fmt) };
     }
     case "get_products": {
       const { scope, r } = scopeAndRange(input, ctx, cfg);
       const p = await Q.products(scope, r);
+      const pw = productsWidget(fmtRange(r.from, r.to), p);
+      if (pw) emit({ type: "widget", widget: pw });
       return { period: fmtRange(r.from, r.to), total: p.total, top: p.rows.slice(0, 10).map((x) => ({ name: x.name, line: x.line, qty: x.qty, revenue: x.revenue, share: Math.round(x.share * 1000) / 10 })) };
     }
     case "get_pl": {
       const r = input.preset ? resolveRange(undefined, undefined, input.preset) : resolveRange(input.from || ctx.from, input.to || ctx.to);
       const p = await Q.pl(r, cfg);
+      emit({ type: "widget", widget: plWidget(fmtRange(r.from, r.to), p) });
       return { period: fmtRange(r.from, r.to), lines: p.columns.map((c) => ({ line: c.label, ...slimKpis(c.kpis), gross: Math.round(c.kpis.gross), prevNet: c.prevNet })) };
     }
     case "set_view": {
@@ -191,7 +201,12 @@ function systemPrompt(cfg: Config) {
     return `- ${a.name} (ID ${a.id}, ${LINES[a.line].label}): target ROAS ${s.targetRoas}x, ${a.line === "jasa" ? `batas CPL ${rp(s.maxCpl ?? 0)}` : `batas CPA ${rp(s.maxCpa ?? 0)}`}, matikan setelah spend ${rp(s.killAfterSpend)}, scale +${s.scaleStepPct}%, PPN iklan ${s.adTaxPct}%`;
   }).join("\n");
   return `Kamu "Bot Iklan", analis iklan Meta untuk owner bisnis Produk Digital AI (jualan di lynk.id) dan Jasa AI (closing manual).
-Gaya: Bahasa Indonesia santai (gw/lo), singkat, angka dulu baru penjelasan. Format uang seperti Rp1,2 jt / Rp450 rb. Pakai daftar pendek kalau perlu, tanpa tabel.
+Gaya: Bahasa Indonesia santai (gw/lo), singkat, angka dulu baru penjelasan. Format uang seperti Rp1,2 jt / Rp450 rb.
+Format jawaban (markdown):
+- Buka dengan 1 kalimat kesimpulan yang **ditebalkan**.
+- Pakai judul kecil (### ) kalau jawabannya punya beberapa bagian, daftar berpoin untuk temuan, dan langkah bernomor untuk saran.
+- Tabel markdown hanya untuk perbandingan kecil (maks. 5 baris) yang tidak sudah tampil sebagai widget.
+- Setiap tool data (get_summary, get_campaigns, get_hourly, get_products, get_pl) OTOMATIS menampilkan widget kartu/grafik ke user. Jangan ulangi semua angkanya; sebut 2–3 angka kunci saja lalu fokus ke insight dan saran.
 
 Prinsip:
 - Selalu ambil angka lewat tools, jangan mengarang. Sebut akun & periode yang dipakai.
@@ -244,6 +259,58 @@ async function chatWithClaude(message: string, history: Anthropic.MessageParam[]
     INSERT INTO chat_messages (conversation_id, user_id, role, content, input_tokens, output_tokens, cache_read_tokens)
     VALUES (${convId}, ${user.id}, 'user', ${sql.json({ text: message })}, null, null, null),
            (${convId}, ${user.id}, 'assistant', ${sql.json({ text: finalText.trim() })}, ${usage.input}, ${usage.output}, ${usage.cacheRead})`;
+}
+
+/* -------------------------------------------------------------------------- Claude Code (jembatan di host) */
+
+/**
+ * Bot memakai Claude Code yang login di VPS (user claude-ads) lewat deploy/claude-bridge.mjs.
+ * Jembatan menjalankan `claude -p` dengan tool dashboard sebagai server MCP (/internal/mcp, token sekali pakai),
+ * lalu mengalirkan teks balik sebagai NDJSON: {t:"text",v} | {t:"break"} | {t:"done",usage} | {t:"error",v}.
+ */
+async function chatViaBridge(message: string, history: { role: "user" | "assistant"; content: string }[], ctx: ChatContext, user: User, emit: Emit, convId: string) {
+  const cfg = await loadConfig();
+  const scope = resolveScope(ctx.acc, cfg);
+  const transcript = history.map((m) => `${m.role === "user" ? "User" : "Bot"}: ${m.content}`).join("\n\n");
+  const prompt = (transcript ? `Riwayat percakapan sebelumnya:\n${transcript}\n\n` : "") +
+    `[Konteks dashboard: ${label(scope, cfg)} · ${fmtRange(ctx.from, ctx.to)} (from=${ctx.from}, to=${ctx.to}) · hari ini ${resolveRange().today}]\n` +
+    `Pesan user: ${message}`;
+  const token = openChatSession({ user, ctx, emit });
+  let finalText = "", usage = { input: 0, output: 0, cacheRead: 0 }, failed: string | null = null;
+  try {
+    const res = await fetch(new URL("/v1/chat", env.CLAUDE_BRIDGE_URL), {
+      method: "POST",
+      headers: { Authorization: `Bearer ${env.CLAUDE_BRIDGE_TOKEN}`, "Content-Type": "application/json" },
+      body: JSON.stringify({ model: env.CLAUDE_MODEL, system: systemPrompt(cfg), prompt, mcpUrl: env.CLAUDE_MCP_URL, mcpToken: token }),
+      signal: AbortSignal.timeout(180_000),
+    });
+    if (res.status === 429) throw new Error("Bot sedang melayani pertanyaan lain, coba lagi beberapa detik lagi.");
+    if (!res.ok || !res.body) throw new Error(`Jembatan Claude menolak (HTTP ${res.status})`);
+    const reader = res.body.getReader(), td = new TextDecoder();
+    let buf = "";
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buf += td.decode(value, { stream: true });
+      let nl: number;
+      while ((nl = buf.indexOf("\n")) >= 0) {
+        const line = buf.slice(0, nl).trim(); buf = buf.slice(nl + 1);
+        if (!line) continue;
+        const m = JSON.parse(line) as { t: string; v?: string; usage?: typeof usage };
+        if (m.t === "text" && m.v) { finalText += m.v; emit({ type: "text", text: m.v }); }
+        else if (m.t === "break" && finalText && !finalText.endsWith("\n\n")) { finalText += "\n\n"; emit({ type: "text", text: "\n\n" }); }
+        else if (m.t === "done" && m.usage) usage = m.usage;
+        else if (m.t === "error") failed = m.v ?? "Claude gagal menjawab";
+      }
+    }
+  } finally {
+    closeChatSession(token);
+  }
+  if (failed && !finalText) throw new Error(failed);
+  await sql`
+    INSERT INTO chat_messages (conversation_id, user_id, role, content, input_tokens, output_tokens, cache_read_tokens)
+    VALUES (${convId}, ${user.id}, 'user', ${sql.json({ text: message })}, null, null, null),
+           (${convId}, ${user.id}, 'assistant', ${sql.json({ text: finalText.trim(), via: "claude-code" })}, ${usage.input}, ${usage.output}, ${usage.cacheRead})`;
 }
 
 /* -------------------------------------------------------------------------- cadangan tanpa AI */
@@ -310,7 +377,10 @@ async function fallbackAnswer(message: string, ctx: ChatContext, user: User, emi
 
 export async function handleChat(input: { message: string; history: { role: "user" | "assistant"; content: string }[]; context: ChatContext; conversationId: string }, user: User, emit: Emit) {
   try {
-    if (aiConfigured()) {
+    if (aiMode() === "bridge") {
+      const history = input.history.slice(-12).filter((m) => m.content?.trim());
+      await chatViaBridge(input.message, history, input.context, user, emit, input.conversationId);
+    } else if (aiConfigured()) {
       const history = input.history.slice(-12).filter((m) => m.content?.trim()).map((m) => ({ role: m.role, content: m.content }) as Anthropic.MessageParam);
       // Pesan pertama harus dari user.
       while (history.length && history[0].role !== "user") history.shift();
