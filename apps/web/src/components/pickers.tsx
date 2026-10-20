@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
+import { createPortal } from "react-dom";
 import { CalendarDays, ChevronDown, ChevronLeft, ChevronRight, Check, Sun, Moon, Layers } from "lucide-react";
 import {
   PRESETS, PRESET_LABELS, fmtRange, shiftRange, compareRange, LINES, type Account, type Preset, type RangePreset,
@@ -23,14 +24,16 @@ function Popover({ open, onClose, anchor, children, align = "left", width = 320 
     return () => { document.removeEventListener("mousedown", onDoc); document.removeEventListener("keydown", onKey); };
   }, [open, onClose, anchor]);
   if (!open) return null;
+  // Bottom sheet di-portal ke body: header memakai backdrop-blur, yang membuat elemen fixed di dalamnya ikut terkurung.
   if (mobile)
-    return (
+    return createPortal(
       <div className="fixed inset-0 z-[60] flex items-end bg-black/40" onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
         <div ref={ref} className="pop-in max-h-[85vh] w-full overflow-y-auto rounded-t-2xl bg-card p-4 pb-[max(16px,env(safe-area-inset-bottom))] shadow-pop">
           <div className="mx-auto mb-3 h-1 w-10 rounded-full bg-line-strong" />
           {children}
         </div>
-      </div>
+      </div>,
+      document.body,
     );
   return (
     <div ref={ref} className={cx("pop-in absolute top-full z-50 mt-2 rounded-2xl border border-line bg-card p-3 shadow-pop", align === "right" ? "right-0" : "left-0")} style={{ width }}>
@@ -132,11 +135,14 @@ export function QuickFilters({ accounts }: { accounts: Account[] }) {
   const lines = (["digital", "jasa"] as const).filter((l) => active.filter((a) => a.line === l).length > 1);
   return (
     <div className="no-print flex flex-col gap-2 lg:flex-row lg:items-center lg:gap-6">
-      <div ref={anchor} className="relative flex min-w-0 items-center gap-1.5 overflow-x-auto scrollbar-none" role="group" aria-label="Periode">
-        {QUICK.map(({ p, label }) => <Chip key={p} on={v.preset === p} onClick={() => setView({ preset: p })}>{label}</Chip>)}
-        <Chip on={v.preset === "custom" || open} onClick={() => setOpen((o) => !o)} aria-expanded={open}>
-          {v.preset === "custom" ? fmtRange(v.from, v.to) : "Custom"}
-        </Chip>
+      {/* Popover di luar baris chip: baris itu overflow-x-auto, jadi apa pun yang keluar darinya akan terpotong. */}
+      <div ref={anchor} className="relative min-w-0 lg:shrink-0">
+        <div className="flex items-center gap-1.5 overflow-x-auto scrollbar-none" role="group" aria-label="Periode">
+          {QUICK.map(({ p, label }) => <Chip key={p} on={v.preset === p} onClick={() => setView({ preset: p })}>{label}</Chip>)}
+          <Chip on={v.preset === "custom" || open} onClick={() => setOpen((o) => !o)} aria-expanded={open}>
+            {v.preset === "custom" ? fmtRange(v.from, v.to) : "Custom"}
+          </Chip>
+        </div>
         <Popover open={open} onClose={() => setOpen(false)} anchor={anchor} align="right" width={320}>
           <p className="label mb-2 px-1">Rentang custom</p>
           <CustomRange onDone={() => setOpen(false)} />

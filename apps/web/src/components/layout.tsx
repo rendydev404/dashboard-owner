@@ -174,7 +174,7 @@ export function Shell({ boot, children }: { boot: Bootstrap; children: ReactNode
         <div className="mx-auto flex max-w-[1320px] flex-wrap items-center gap-x-4 gap-y-3 px-4 py-3 md:px-8 md:pt-7 md:pb-2">
           <button className="btn btn-ghost -ml-2 hidden size-10 p-0 md:inline-flex lg:hidden" onClick={() => setDrawer(true)} aria-label="Buka menu"><Menu size={20} /></button>
           <h1 className="mr-auto text-[22px] font-semibold tracking-tight md:mr-0 md:text-[26px]">{TAB_TITLE[v.tab]}</h1>
-          <div className="order-3 flex w-full min-w-0 items-center gap-2 overflow-x-auto scrollbar-none md:order-none md:w-auto md:flex-1">
+          <div className="order-3 flex w-full min-w-0 items-center gap-2 md:order-none md:w-auto md:flex-1">
             <PeriodPicker />
           </div>
           <div className="no-print flex items-center gap-1 md:gap-3">
