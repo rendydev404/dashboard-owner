@@ -120,7 +120,7 @@ export async function launchContext(accountId: string) {
     pages: unwrap((pages as any).pages ?? (pages as any).data ?? pages),
     instagramAccounts: unwrap((ig as any).ig_accounts ?? (ig as any).instagram_accounts ?? (ig as any).data ?? ig),
     pixels: unwrap((datasets as any).datasets ?? (datasets as any).data ?? datasets),
-    existingCreatives: unwrap((creatives as any).creatives ?? (creatives as any).data ?? creatives),
+    existingCreatives: unwrap((creatives as any).ad_creatives ?? (creatives as any).creatives ?? creatives),
     topCampaigns30d: top.map((r) => ({ ...r, roas: r.spend ? Math.round((Number(r.value) / Number(r.spend)) * 100) / 100 : 0 })),
     products: products.map((p) => ({ name: p.name, price: p.price, url: p.url })),
   };
