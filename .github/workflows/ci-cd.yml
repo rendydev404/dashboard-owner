@@ -83,4 +83,4 @@ jobs:
             exit 0
           fi
           # Coolify v4.4+: endpoint deploy wajib POST.
-          curl -fsS --max-time 30 -X POST -H "Authorization: Bearer $COOLIFY_TOKEN" "$COOLIFY_WEBHOOK"
+          curl -fsS --connect-timeout 10 --max-time 30 --retry 4 --retry-all-errors --retry-delay 10 -X POST -H "Authorization: Bearer $COOLIFY_TOKEN" "$COOLIFY_WEBHOOK"
