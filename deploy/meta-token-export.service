@@ -1,6 +1,10 @@
 [Unit]
-Description=Ekspor token Meta Ads (dari login Claude Code claude-ads) untuk dashboard iklan
+Description=Ekspor token Meta Ads (dari login Claude Code claude-ads) lalu kirim ke VPS dashboard
+After=network-online.target
+Wants=network-online.target
 
 [Service]
 Type=oneshot
 ExecStart=/usr/bin/python3 /opt/ads-dashboard/export-meta-token.py
+ExecStartPost=/bin/sh /opt/ads-dashboard/push-meta-token.sh
+Nice=10
