@@ -131,7 +131,8 @@ function objectiveSpec(p: LaunchPlan) {
     case "sales": return { objective: "OUTCOME_SALES", goal: "OFFSITE_CONVERSIONS", destination: "WEBSITE", promoted: { pixel_id: p.pixelId, custom_event_type: "PURCHASE" } };
     case "leads_website": return { objective: "OUTCOME_LEADS", goal: "OFFSITE_CONVERSIONS", destination: "WEBSITE", promoted: { pixel_id: p.pixelId, custom_event_type: "LEAD" } };
     case "leads_whatsapp": return { objective: "OUTCOME_LEADS", goal: "CONVERSATIONS", destination: "WHATSAPP", promoted: { page_id: p.pageId } };
-    case "traffic": return { objective: "OUTCOME_TRAFFIC", goal: "LANDING_PAGE_VIEWS", destination: "WEBSITE", promoted: p.pixelId ? { pixel_id: p.pixelId } : undefined };
+    // Meta: untuk OUTCOME_TRAFFIC dengan LANDING_PAGE_VIEWS/LINK_CLICKS, promoted_object harus dikosongkan.
+    case "traffic": return { objective: "OUTCOME_TRAFFIC", goal: "LANDING_PAGE_VIEWS", destination: "WEBSITE", promoted: undefined };
   }
 }
 

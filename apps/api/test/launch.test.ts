@@ -9,7 +9,11 @@ vi.mock("../src/meta/mcp", () => ({
     calls.push({ tool, args });
     if (tool === failAt) throw new Error(`gagal di ${tool}`);
     switch (tool) {
-      case "ads_create_campaign": return { campaign_id: "c1", status: "DRAFT", valid_optimization_goals: ["OFFSITE_CONVERSIONS", "VALUE"], recommended_optimization_goal: "OFFSITE_CONVERSIONS" };
+      case "ads_create_campaign": {
+        const goals: Record<string, string[]> = { OUTCOME_SALES: ["OFFSITE_CONVERSIONS", "VALUE"], OUTCOME_TRAFFIC: ["LANDING_PAGE_VIEWS", "LINK_CLICKS"], OUTCOME_LEADS: ["OFFSITE_CONVERSIONS", "CONVERSATIONS"] };
+        const valid = goals[args.objective] ?? [];
+        return { campaign_id: "c1", status: "DRAFT", valid_optimization_goals: valid, recommended_optimization_goal: valid[0] };
+      }
       case "ads_create_ad_set": return { ad_set_id: "s1", status: "DRAFT" };
       case "ads_create_creative": return { creative_id: "k1" };
       case "ads_create_ad": return { ad_id: "a1", status: "DRAFT" };
@@ -81,5 +85,15 @@ describe("explain", () => {
     const { explain } = await import("../src/meta/launch");
     expect(explain('{"error_subcode":"2310081","error_message":"Set produk tidak valid"}')).toMatch(/katalog/);
     expect(explain("error lain")).toBe("error lain");
+  });
+});
+
+describe("traffic", () => {
+  it("tidak mengirim promoted_object (ditolak Meta untuk LANDING_PAGE_VIEWS)", async () => {
+    calls.length = 0; failAt = null;
+    await executeLaunch(launchPlanSchema.parse({ ...plan, objective: "traffic" }));
+    const adset = calls.find((c) => c.tool === "ads_create_ad_set")!.args;
+    expect(adset).toMatchObject({ optimization_goal: "LANDING_PAGE_VIEWS", destination_type: "WEBSITE" });
+    expect(adset.promoted_object).toBeUndefined();
   });
 });
