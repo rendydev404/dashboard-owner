@@ -6,7 +6,7 @@ import {
 import { fmtRange, type Bootstrap } from "@iklan/shared";
 import { setView, useView, type Tab } from "../lib/view";
 import { api, queryClient } from "../lib/api";
-import { PeriodPicker, AccountPicker, ThemeToggle } from "./pickers";
+import { PeriodPicker, QuickFilters, ThemeToggle } from "./pickers";
 import { cx, Modal } from "./ui";
 
 /* ------------------------------------------------------------------ chat open state */
@@ -175,8 +175,7 @@ export function Shell({ boot, children }: { boot: Bootstrap; children: ReactNode
           <button className="btn btn-ghost -ml-2 hidden size-10 p-0 md:inline-flex lg:hidden" onClick={() => setDrawer(true)} aria-label="Buka menu"><Menu size={20} /></button>
           <h1 className="mr-auto text-[22px] font-semibold tracking-tight md:mr-0 md:text-[26px]">{TAB_TITLE[v.tab]}</h1>
           <div className="order-3 flex w-full min-w-0 items-center gap-2 overflow-x-auto scrollbar-none md:order-none md:w-auto md:flex-1">
-            <PeriodPicker compact />
-            <AccountPicker accounts={boot.accounts} />
+            <PeriodPicker />
           </div>
           <div className="no-print flex items-center gap-1 md:gap-3">
             <a href={exportUrl} className="btn btn-ghost hidden size-9 p-0 md:inline-flex" title="Unduh CSV kampanye" aria-label="Unduh CSV"><Download size={17} /></a>
@@ -191,6 +190,11 @@ export function Shell({ boot, children }: { boot: Bootstrap; children: ReactNode
             </div>
           </div>
         </div>
+        {v.tab !== "pengaturan" && (
+          <div className="mx-auto max-w-[1320px] px-4 pb-3 md:px-8">
+            <QuickFilters accounts={boot.accounts} />
+          </div>
+        )}
       </header>
 
       <main className="mx-auto max-w-[1320px] px-4 pb-32 pt-3 md:px-8 md:pb-16">

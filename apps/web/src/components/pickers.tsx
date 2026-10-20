@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { CalendarDays, ChevronDown, ChevronLeft, ChevronRight, Check, Sun, Moon, Layers } from "lucide-react";
 import {
-  PRESETS, PRESET_LABELS, fmtRange, shiftRange, compareRange, LINES, type Account, type RangePreset,
+  PRESETS, PRESET_LABELS, fmtRange, shiftRange, compareRange, LINES, type Account, type Preset, type RangePreset,
 } from "@iklan/shared";
 import { setView, useView, getToday } from "../lib/view";
 import { cx, useMediaQuery } from "./ui";
@@ -39,13 +39,29 @@ function Popover({ open, onClose, anchor, children, align = "left", width = 320 
   );
 }
 
+/** Form rentang tanggal custom (dipakai dropdown periode & filter cepat). */
+function CustomRange({ onDone }: { onDone: () => void }) {
+  const v = useView();
+  const today = getToday();
+  const [cf, setCf] = useState(v.from), [ct, setCt] = useState(v.to);
+  useEffect(() => { setCf(v.from); setCt(v.to); }, [v.from, v.to]);
+  return (
+    <>
+      <div className="flex items-center gap-2">
+        <input type="date" className="input min-h-[38px] px-2 text-[13px]" value={cf} max={today} onChange={(e) => setCf(e.target.value)} aria-label="Tanggal mulai" />
+        <span className="text-muted">–</span>
+        <input type="date" className="input min-h-[38px] px-2 text-[13px]" value={ct} max={today} onChange={(e) => setCt(e.target.value)} aria-label="Tanggal akhir" />
+      </div>
+      <button className="btn btn-primary mt-2 w-full" disabled={!cf || !ct} onClick={() => { setView({ preset: "custom", from: cf, to: ct }); onDone(); }}>Terapkan</button>
+    </>
+  );
+}
+
 export function PeriodPicker({ compact }: { compact?: boolean }) {
   const v = useView();
   const [open, setOpen] = useState(false);
   const anchor = useRef<HTMLButtonElement>(null);
   const today = getToday();
-  const [cf, setCf] = useState(v.from), [ct, setCt] = useState(v.to);
-  useEffect(() => { setCf(v.from); setCt(v.to); }, [v.from, v.to]);
   const [pf, pt] = v.from ? compareRange(v.from, v.to) : ["", ""];
   const shift = (dir: 1 | -1) => {
     const [s, e] = shiftRange(v.from, v.to, dir, today);
@@ -75,12 +91,7 @@ export function PeriodPicker({ compact }: { compact?: boolean }) {
           </div>
           <div className="mt-3 border-t border-line pt-3">
             <p className="label mb-2 px-1">Custom</p>
-            <div className="flex items-center gap-2">
-              <input type="date" className="input min-h-[38px] px-2 text-[13px]" value={cf} max={today} onChange={(e) => setCf(e.target.value)} aria-label="Tanggal mulai" />
-              <span className="text-muted">–</span>
-              <input type="date" className="input min-h-[38px] px-2 text-[13px]" value={ct} max={today} onChange={(e) => setCt(e.target.value)} aria-label="Tanggal akhir" />
-            </div>
-            <button className="btn btn-primary mt-2 w-full" disabled={!cf || !ct} onClick={() => { setView({ preset: "custom", from: cf, to: ct }); setOpen(false); }}>Terapkan</button>
+            <CustomRange onDone={() => setOpen(false)} />
           </div>
           {v.from && <p className="mt-3 px-1 text-[12px] text-muted">Dibanding {fmtRange(pf, pt)}</p>}
         </Popover>
@@ -97,39 +108,47 @@ export function accLabel(acc: string, accounts: Account[]) {
   return accounts.find((a) => a.id === acc)?.name ?? "Akun";
 }
 
-export function AccountPicker({ accounts }: { accounts: Account[] }) {
-  const v = useView();
-  const [open, setOpen] = useState(false);
-  const anchor = useRef<HTMLButtonElement>(null);
-  const active = accounts.filter((a) => a.active);
-  const groups: { id: string; label: string; sub: string }[] = [{ id: "all", label: "Semua akun", sub: "Gabungan semua lini" }];
-  const byLine = (l: "digital" | "jasa") => active.filter((a) => a.line === l);
-  if (byLine("digital").length) groups.push({ id: "digital", label: "Akun Produk Digital", sub: `${byLine("digital").length} akun · omzet lynk.id` });
-  if (byLine("jasa").length) groups.push({ id: "jasa", label: "Akun Jasa", sub: `${byLine("jasa").length} akun · leads & closing` });
-  const item = (id: string, label: string, sub: string) => (
-    <button key={id} onClick={() => { setView({ acc: id }); setOpen(false); }}
-      className={cx("flex w-full items-center justify-between gap-3 rounded-lg px-3 py-2.5 text-left hover:bg-hover", v.acc === id && "bg-accent-soft")}>
-      <span className="min-w-0">
-        <span className={cx("block truncate text-[13.5px]", v.acc === id && "font-semibold text-accent")}>{label}</span>
-        <span className="block truncate text-[12px] text-muted">{sub}</span>
-      </span>
-      {v.acc === id && <Check size={15} className="shrink-0 text-accent" />}
+const QUICK: { p: Preset; label: string }[] = [
+  { p: "today", label: "Hari ini" }, { p: "yesterday", label: "Kemarin" }, { p: "7d", label: "7 hari" },
+  { p: "thismonth", label: "Bulan ini" }, { p: "30d", label: "30 hari" },
+];
+
+function Chip({ on, onClick, children, title, ...rest }: { on: boolean; onClick: () => void; children: ReactNode; title?: string } & React.AriaAttributes) {
+  return (
+    <button onClick={onClick} title={title} aria-pressed={on} {...rest}
+      className={cx("h-8 max-w-[220px] shrink-0 truncate rounded-full border px-3 text-[13px] transition-colors",
+        on ? "border-accent bg-accent-soft font-semibold text-accent" : "border-line bg-card text-ink hover:border-line-strong")}>
+      {children}
     </button>
   );
+}
+
+/** Filter cepat yang selalu terlihat: periode umum + custom, dan pilihan akun. */
+export function QuickFilters({ accounts }: { accounts: Account[] }) {
+  const v = useView();
+  const [open, setOpen] = useState(false);
+  const anchor = useRef<HTMLDivElement>(null);
+  const active = accounts.filter((a) => a.active);
+  const lines = (["digital", "jasa"] as const).filter((l) => active.filter((a) => a.line === l).length > 1);
   return (
-    <div className="relative">
-      <button ref={anchor} onClick={() => setOpen((o) => !o)} aria-haspopup="dialog" aria-expanded={open}
-        className="flex h-9 max-w-[220px] items-center gap-2 rounded-full border border-line bg-card px-3 text-[13px] font-medium hover:border-line-strong">
-        <Layers size={15} className="shrink-0 text-muted" />
-        <span className="truncate">{accLabel(v.acc, accounts)}</span>
-        <ChevronDown size={14} className="shrink-0 text-muted" />
-      </button>
-      <Popover open={open} onClose={() => setOpen(false)} anchor={anchor} width={300}>
-        <p className="label mb-1 px-1">Tampilan</p>
-        {groups.map((g) => item(g.id, g.label, g.sub))}
-        {active.length > 1 && <p className="label mb-1 mt-3 px-1">Per akun</p>}
-        {active.length > 1 && active.map((a) => item(a.id, a.name, LINES[a.line].label))}
-      </Popover>
+    <div className="no-print flex flex-col gap-2 lg:flex-row lg:items-center lg:gap-6">
+      <div ref={anchor} className="relative flex min-w-0 items-center gap-1.5 overflow-x-auto scrollbar-none" role="group" aria-label="Periode">
+        {QUICK.map(({ p, label }) => <Chip key={p} on={v.preset === p} onClick={() => setView({ preset: p })}>{label}</Chip>)}
+        <Chip on={v.preset === "custom" || open} onClick={() => setOpen((o) => !o)} aria-expanded={open}>
+          {v.preset === "custom" ? fmtRange(v.from, v.to) : "Custom"}
+        </Chip>
+        <Popover open={open} onClose={() => setOpen(false)} anchor={anchor} align="right" width={320}>
+          <p className="label mb-2 px-1">Rentang custom</p>
+          <CustomRange onDone={() => setOpen(false)} />
+        </Popover>
+      </div>
+      {active.length > 0 && (
+        <div className="flex min-w-0 items-center gap-1.5 overflow-x-auto scrollbar-none" role="group" aria-label="Akun iklan">
+          <Chip on={v.acc === "all"} onClick={() => setView({ acc: "all" })}>Semua akun</Chip>
+          {lines.map((l) => <Chip key={l} on={v.acc === l} onClick={() => setView({ acc: l })}>{accLabel(l, accounts)}</Chip>)}
+          {active.map((a) => <Chip key={a.id} on={v.acc === a.id} onClick={() => setView({ acc: a.id })} title={`${a.name} · ${LINES[a.line].label}`}>{a.name}</Chip>)}
+        </div>
+      )}
     </div>
   );
 }
