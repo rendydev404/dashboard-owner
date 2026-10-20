@@ -59,14 +59,16 @@ E2E memakai Edge/Chrome yang sudah terpasang (`PW_CHANNEL=chrome` untuk Chrome),
 1. **Database:** buat resource PostgreSQL `iklan-db` (image `postgres:18-alpine`, limit memori 256 MB, backup harian 03:00, retensi 14 hari).
 2. **Aplikasi:** sumber = repo GitHub privat ini, build pack **Dockerfile**, port `3000`, healthcheck `/healthz`, limit memori 384 MB / CPU 0,5, pasang domain.
 3. **Environment:** isi semua variabel dari `.env.example` (tandai sebagai secret). `DATABASE_URL` memakai hostname internal `iklan-db`.
-3a. **Token Meta lewat MCP (di VPS, sekali saja).** Jangan mount `.credentials.json` utuh: file itu juga berisi login akun Claude. Pakai skrip ekspor yang hanya menyalin token Meta:
-   ```bash
-   mkdir -p /opt/ads-dashboard
-   cp deploy/export-meta-token.py /opt/ads-dashboard/
-   cp deploy/meta-token-export.service deploy/meta-token-export.timer /etc/systemd/system/
-   systemctl daemon-reload && systemctl enable --now meta-token-export.timer
-   ```
-   Lalu di Coolify → aplikasi → Storages tambahkan **bind mount** read-only `/opt/ads-dashboard/meta-token.json` → `/run/meta/meta-token.json` dan set env `META_MCP_CRED=/run/meta/meta-token.json`. Skrip memberi file ke uid 1000 (user `node` di container); ubah dengan env `DASHBOARD_UID` kalau berbeda. Kalau login Meta di Claude Code habis (±60 hari), login ulang seperti biasa; dashboard menampilkan peringatan 7 hari sebelumnya.
+3a. **Token Meta lewat MCP.** Login Claude Code `claude-ads` ada di VPS lama (76.13.193.138), dashboard di VPS 3 (31.97.67.66). Jangan mount `.credentials.json` utuh: file itu juga berisi login akun Claude.
+   - **VPS lama:** `export-meta-token.py` menyalin HANYA token Meta ke `/opt/ads-dashboard/meta-token.json`, lalu `push-meta-token.sh` mengirimnya ke VPS 3 hanya kalau isinya berubah. Timer tiap 10 menit.
+     ```bash
+     cp deploy/export-meta-token.py deploy/push-meta-token.sh /opt/ads-dashboard/
+     cp deploy/meta-token-export.service deploy/meta-token-export.timer /etc/systemd/system/
+     systemctl daemon-reload && systemctl enable --now meta-token-export.timer
+     ```
+   - **VPS 3:** kunci `meta-token-push` di `/root/.ssh/authorized_keys2` dibatasi `from="76.13.193.138",command="/usr/local/bin/receive-meta-token",restrict` (skrip: `deploy/receive-meta-token`). Kunci itu hanya bisa menulis file token (0400, uid 1000), tidak bisa membuka shell.
+   - **Coolify:** bind mount direktori `/opt/ads-dashboard` → `/run/meta` (direktori, bukan file, supaya penggantian atomik terlihat di container) dan env `META_MCP_CRED=/run/meta/meta-token.json`. Kalau login Meta di Claude Code habis (±60 hari), login ulang di VPS lama; dashboard menampilkan peringatan 7 hari sebelumnya.
+   - **Resource:** app dibatasi 384 MB / 0,5 CPU, Postgres 256 MB / 0,5 CPU (`max_connections=20`, `shared_buffers=64MB`). Sync `recent` (2 hari) tiap 30 mnt (120 mnt di jam 00–06), `nightly` 28 hari jam 02, backfill 180 hari sekali per akun baru.
 4. **Deploy.** Migrasi berjalan otomatis saat boot. Buat akun owner dari terminal container Coolify:
    ```bash
    node dist/cli/user-create.js owner@domain.com "Nama Owner" owner
