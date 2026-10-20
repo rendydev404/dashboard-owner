@@ -1,0 +1,505 @@
+[
+ {
+  "date_start": "2026-08-26",
+  "date_stop": "2026-08-26",
+  "amount_spent": {
+   "value": "149398",
+   "unit": "IDR"
+  },
+  "impressions": "4668",
+  "link_click": "112",
+  "omni_purchase": "1",
+  "omni_purchase_values": {
+   "value": "49000",
+   "unit": "IDR"
+  },
+  "id": "120249461489020430",
+  "name": "TIMELAPSE - 26 Agustus",
+  "status": "PAUSED",
+  "effective_status": "PAUSED",
+  "daily_budget": {
+   "value": "253472",
+   "unit": "IDR"
+  }
+ },
+ {
+  "date_start": "2026-08-27",
+  "date_stop": "2026-08-27",
+  "amount_spent": {
+   "value": "203392",
+   "unit": "IDR"
+  },
+  "impressions": "2796",
+  "link_click": "84",
+  "omni_purchase": "6",
+  "omni_purchase_values": {
+   "value": "294000",
+   "unit": "IDR"
+  },
+  "id": "120249461489020430",
+  "name": "TIMELAPSE - 26 Agustus",
+  "status": "PAUSED",
+  "effective_status": "PAUSED",
+  "daily_budget": {
+   "value": "253472",
+   "unit": "IDR"
+  }
+ },
+ {
+  "date_start": "2026-08-28",
+  "date_stop": "2026-08-28",
+  "amount_spent": {
+   "value": "147210",
+   "unit": "IDR"
+  },
+  "impressions": "2675",
+  "link_click": "57",
+  "omni_purchase": "4",
+  "omni_purchase_values": {
+   "value": "196000",
+   "unit": "IDR"
+  },
+  "id": "120249461489020430",
+  "name": "TIMELAPSE - 26 Agustus",
+  "status": "PAUSED",
+  "effective_status": "PAUSED",
+  "daily_budget": {
+   "value": "253472",
+   "unit": "IDR"
+  }
+ },
+ {
+  "date_start": "2026-08-29",
+  "date_stop": "2026-08-29",
+  "amount_spent": {
+   "value": "408037",
+   "unit": "IDR"
+  },
+  "impressions": "7509",
+  "link_click": "190",
+  "omni_purchase": "8",
+  "omni_purchase_values": {
+   "value": "392000",
+   "unit": "IDR"
+  },
+  "id": "120249461489020430",
+  "name": "TIMELAPSE - 26 Agustus",
+  "status": "PAUSED",
+  "effective_status": "PAUSED",
+  "daily_budget": {
+   "value": "253472",
+   "unit": "IDR"
+  }
+ },
+ {
+  "date_start": "2026-08-30",
+  "date_stop": "2026-08-30",
+  "amount_spent": {
+   "value": "91963",
+   "unit": "IDR"
+  },
+  "impressions": "1640",
+  "link_click": "49",
+  "omni_purchase": "3",
+  "omni_purchase_values": {
+   "value": "147000",
+   "unit": "IDR"
+  },
+  "id": "120249461489020430",
+  "name": "TIMELAPSE - 26 Agustus",
+  "status": "PAUSED",
+  "effective_status": "PAUSED",
+  "daily_budget": {
+   "value": "253472",
+   "unit": "IDR"
+  }
+ },
+ {
+  "date_start": "2026-09-11",
+  "date_stop": "2026-09-11",
+  "amount_spent": {
+   "value": "288505",
+   "unit": "IDR"
+  },
+  "impressions": "7169",
+  "link_click": "199",
+  "omni_purchase": "8",
+  "omni_purchase_values": {
+   "value": "392000",
+   "unit": "IDR"
+  },
+  "id": "120249461489020430",
+  "name": "TIMELAPSE - 26 Agustus",
+  "status": "PAUSED",
+  "effective_status": "PAUSED",
+  "daily_budget": {
+   "value": "253472",
+   "unit": "IDR"
+  }
+ },
+ {
+  "date_start": "2026-09-12",
+  "date_stop": "2026-09-12",
+  "amount_spent": {
+   "value": "431143",
+   "unit": "IDR"
+  },
+  "impressions": "10449",
+  "link_click": "293",
+  "omni_purchase": "11",
+  "omni_purchase_values": {
+   "value": "539000",
+   "unit": "IDR"
+  },
+  "id": "120249461489020430",
+  "name": "TIMELAPSE - 26 Agustus",
+  "status": "PAUSED",
+  "effective_status": "PAUSED",
+  "daily_budget": {
+   "value": "253472",
+   "unit": "IDR"
+  }
+ },
+ {
+  "date_start": "2026-09-13",
+  "date_stop": "2026-09-13",
+  "amount_spent": {
+   "value": "274784",
+   "unit": "IDR"
+  },
+  "impressions": "9673",
+  "link_click": "226",
+  "omni_purchase": "6",
+  "omni_purchase_values": {
+   "value": "294000",
+   "unit": "IDR"
+  },
+  "id": "120249461489020430",
+  "name": "TIMELAPSE - 26 Agustus",
+  "status": "PAUSED",
+  "effective_status": "PAUSED",
+  "daily_budget": {
+   "value": "253472",
+   "unit": "IDR"
+  }
+ },
+ {
+  "date_start": "2026-09-14",
+  "date_stop": "2026-09-14",
+  "amount_spent": {
+   "value": "208738",
+   "unit": "IDR"
+  },
+  "impressions": "10245",
+  "link_click": "221",
+  "omni_purchase": "4",
+  "omni_purchase_values": {
+   "value": "196000",
+   "unit": "IDR"
+  },
+  "id": "120249461489020430",
+  "name": "TIMELAPSE - 26 Agustus",
+  "status": "PAUSED",
+  "effective_status": "PAUSED",
+  "daily_budget": {
+   "value": "253472",
+   "unit": "IDR"
+  }
+ },
+ {
+  "date_start": "2026-09-15",
+  "date_stop": "2026-09-15",
+  "amount_spent": {
+   "value": "187766",
+   "unit": "IDR"
+  },
+  "impressions": "6774",
+  "link_click": "188",
+  "omni_purchase": "7",
+  "omni_purchase_values": {
+   "value": "343000",
+   "unit": "IDR"
+  },
+  "id": "120249461489020430",
+  "name": "TIMELAPSE - 26 Agustus",
+  "status": "PAUSED",
+  "effective_status": "PAUSED",
+  "daily_budget": {
+   "value": "253472",
+   "unit": "IDR"
+  }
+ },
+ {
+  "date_start": "2026-09-15",
+  "date_stop": "2026-09-15",
+  "amount_spent": {
+   "value": "147754",
+   "unit": "IDR"
+  },
+  "impressions": "6146",
+  "link_click": "109",
+  "omni_purchase": "1",
+  "omni_purchase_values": {
+   "value": "49000",
+   "unit": "IDR"
+  },
+  "id": "120249739418940430",
+  "name": "Rahasia Konten AI Viral",
+  "status": "PAUSED",
+  "effective_status": "PAUSED",
+  "daily_budget": {
+   "value": "200860",
+   "unit": "IDR"
+  }
+ },
+ {
+  "date_start": "2026-09-16",
+  "date_stop": "2026-09-16",
+  "amount_spent": {
+   "value": "299675",
+   "unit": "IDR"
+  },
+  "impressions": "9601",
+  "link_click": "245",
+  "omni_purchase": "8",
+  "omni_purchase_values": {
+   "value": "392000",
+   "unit": "IDR"
+  },
+  "id": "120249461489020430",
+  "name": "TIMELAPSE - 26 Agustus",
+  "status": "PAUSED",
+  "effective_status": "PAUSED",
+  "daily_budget": {
+   "value": "253472",
+   "unit": "IDR"
+  }
+ },
+ {
+  "date_start": "2026-09-16",
+  "date_stop": "2026-09-16",
+  "amount_spent": {
+   "value": "94660",
+   "unit": "IDR"
+  },
+  "impressions": "2185",
+  "link_click": "46",
+  "omni_purchase": null,
+  "omni_purchase_values": null,
+  "id": "120249739418940430",
+  "name": "Rahasia Konten AI Viral",
+  "status": "PAUSED",
+  "effective_status": "PAUSED",
+  "daily_budget": {
+   "value": "200860",
+   "unit": "IDR"
+  }
+ },
+ {
+  "date_start": "2026-09-17",
+  "date_stop": "2026-09-17",
+  "amount_spent": {
+   "value": "66974",
+   "unit": "IDR"
+  },
+  "impressions": "1788",
+  "link_click": "41",
+  "omni_purchase": "4",
+  "omni_purchase_values": {
+   "value": "196000",
+   "unit": "IDR"
+  },
+  "id": "120249461489020430",
+  "name": "TIMELAPSE - 26 Agustus",
+  "status": "PAUSED",
+  "effective_status": "PAUSED",
+  "daily_budget": {
+   "value": "253472",
+   "unit": "IDR"
+  }
+ },
+ {
+  "date_start": "2026-09-18",
+  "date_stop": "2026-09-18",
+  "amount_spent": {
+   "value": "302467",
+   "unit": "IDR"
+  },
+  "impressions": "8151",
+  "link_click": "185",
+  "omni_purchase": "2",
+  "omni_purchase_values": {
+   "value": "98000",
+   "unit": "IDR"
+  },
+  "id": "120249461489020430",
+  "name": "TIMELAPSE - 26 Agustus",
+  "status": "PAUSED",
+  "effective_status": "PAUSED",
+  "daily_budget": {
+   "value": "253472",
+   "unit": "IDR"
+  }
+ },
+ {
+  "date_start": "2026-09-19",
+  "date_stop": "2026-09-19",
+  "amount_spent": {
+   "value": "197533",
+   "unit": "IDR"
+  },
+  "impressions": "4927",
+  "link_click": "141",
+  "omni_purchase": "4",
+  "omni_purchase_values": {
+   "value": "196000",
+   "unit": "IDR"
+  },
+  "id": "120249461489020430",
+  "name": "TIMELAPSE - 26 Agustus",
+  "status": "PAUSED",
+  "effective_status": "PAUSED",
+  "daily_budget": {
+   "value": "253472",
+   "unit": "IDR"
+  }
+ },
+ {
+  "date_start": "2026-09-20",
+  "date_stop": "2026-09-20",
+  "amount_spent": {
+   "value": "1",
+   "unit": "IDR"
+  },
+  "impressions": "2",
+  "link_click": null,
+  "omni_purchase": null,
+  "omni_purchase_values": null,
+  "id": "120249461489020430",
+  "name": "TIMELAPSE - 26 Agustus",
+  "status": "PAUSED",
+  "effective_status": "PAUSED",
+  "daily_budget": {
+   "value": "253472",
+   "unit": "IDR"
+  }
+ },
+ {
+  "date_start": "2026-10-06",
+  "date_stop": "2026-10-06",
+  "amount_spent": {
+   "value": "257596",
+   "unit": "IDR"
+  },
+  "impressions": "572686",
+  "link_click": "3153",
+  "omni_purchase": "8",
+  "omni_purchase_values": {
+   "value": "392000",
+   "unit": "IDR"
+  },
+  "id": "120250018154910430",
+  "name": "TIMELAPSE - 05 Oktober",
+  "status": "PAUSED",
+  "effective_status": "PAUSED",
+  "daily_budget": {
+   "value": "254090",
+   "unit": "IDR"
+  }
+ },
+ {
+  "date_start": "2026-10-06",
+  "date_stop": "2026-10-06",
+  "amount_spent": {
+   "value": "73645",
+   "unit": "IDR"
+  },
+  "impressions": "1858",
+  "link_click": "65",
+  "omni_purchase": "5",
+  "omni_purchase_values": {
+   "value": "245000",
+   "unit": "IDR"
+  },
+  "id": "120250029403910430",
+  "name": "TIMELAPSE - ROAS Min 1.5 - 06 Oktober",
+  "status": "PAUSED",
+  "effective_status": "PAUSED"
+ },
+ {
+  "date_start": "2026-10-06",
+  "date_stop": "2026-10-06",
+  "amount_spent": {
+   "value": "45407",
+   "unit": "IDR"
+  },
+  "impressions": "1368",
+  "link_click": "40",
+  "omni_purchase": null,
+  "omni_purchase_values": null,
+  "id": "120250033496770430",
+  "name": "TIMELAPSE - Audiens Luas Advantage+ - 06 Oktober",
+  "status": "PAUSED",
+  "effective_status": "PAUSED"
+ },
+ {
+  "date_start": "2026-08-01",
+  "date_stop": "2026-08-01",
+  "amount_spent": {
+   "value": "0",
+   "unit": "IDR"
+  },
+  "impressions": "0",
+  "link_click": null,
+  "omni_purchase": null,
+  "omni_purchase_values": null,
+  "id": "120249461489020430",
+  "name": "TIMELAPSE - 26 Agustus",
+  "status": "PAUSED",
+  "effective_status": "PAUSED",
+  "daily_budget": {
+   "value": "253472",
+   "unit": "IDR"
+  }
+ },
+ {
+  "date_start": "2026-08-01",
+  "date_stop": "2026-08-01",
+  "amount_spent": {
+   "value": "0",
+   "unit": "IDR"
+  },
+  "impressions": "0",
+  "link_click": null,
+  "omni_purchase": null,
+  "omni_purchase_values": null,
+  "id": "120249739418940430",
+  "name": "Rahasia Konten AI Viral",
+  "status": "PAUSED",
+  "effective_status": "PAUSED",
+  "daily_budget": {
+   "value": "200860",
+   "unit": "IDR"
+  }
+ },
+ {
+  "date_start": "2026-08-01",
+  "date_stop": "2026-08-01",
+  "amount_spent": {
+   "value": "0",
+   "unit": "IDR"
+  },
+  "impressions": "0",
+  "link_click": null,
+  "omni_purchase": null,
+  "omni_purchase_values": null,
+  "id": "120250018154910430",
+  "name": "TIMELAPSE - 05 Oktober",
+  "status": "PAUSED",
+  "effective_status": "PAUSED",
+  "daily_budget": {
+   "value": "254090",
+   "unit": "IDR"
+  }
+ }
+]

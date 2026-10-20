@@ -1,0 +1,6 @@
+[Unit]
+Description=Ekspor token Meta Ads (dari login Claude Code claude-ads) untuk dashboard iklan
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/python3 /opt/ads-dashboard/export-meta-token.py

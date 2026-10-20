@@ -1,0 +1,9 @@
+[Unit]
+Description=Perbarui token Meta Ads untuk dashboard tiap 10 menit
+
+[Timer]
+OnBootSec=1min
+OnUnitActiveSec=10min
+
+[Install]
+WantedBy=timers.target

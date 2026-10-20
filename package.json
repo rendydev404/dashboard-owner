@@ -1,0 +1,23 @@
+{
+  "name": "dashboard-iklan",
+  "private": true,
+  "type": "module",
+  "packageManager": "pnpm@11.22.0",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "dev:db": "node scripts/dev-db.mjs",
+    "dev:api": "pnpm --filter @iklan/api dev",
+    "dev:web": "pnpm --filter @iklan/web dev",
+    "build": "pnpm --filter @iklan/web build && pnpm --filter @iklan/api build",
+    "test": "pnpm -r --if-present test",
+    "typecheck": "pnpm -r --if-present typecheck",
+    "migrate": "pnpm --filter @iklan/api migrate",
+    "seed:demo": "pnpm --filter @iklan/api seed:demo",
+    "user:create": "pnpm --filter @iklan/api user:create"
+  },
+  "devDependencies": {
+    "playwright-core": "1.49.1"
+  }
+}

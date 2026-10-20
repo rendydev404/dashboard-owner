@@ -1,0 +1,140 @@
+@import "tailwindcss";
+
+/* Token desain (PRD §9.3) — aksen indigo, gaya mengikuti foto referensi. */
+:root {
+  --bg: #f4f5f7; --panel: #ffffff; --card: #ffffff; --line: #ecedf1; --line-strong: #dfe1e7;
+  --ink: #1d1f2c; --muted: #8a8fa3; --muted-2: #b4b8c6;
+  --accent: #4f46e5; --accent-hover: #4338ca; --accent-soft: #eef2ff; --accent-ink: #ffffff;
+  --nav-active-bg: #eef2ff; --nav-active-ink: #4338ca;
+  --yellow: #ffc21a; --yellow-soft: #fff5d6; --yellow-ink: #8a6100;
+  --green: #22a55b; --green-soft: #e8f7ee; --green-ink: #15803d;
+  --red: #e5484d; --red-soft: #fdecec; --red-ink: #c0262d;
+  --violet-a: #a855f7; --violet-b: #7c3aed; --pink: #d16bf2;
+  --track: #eef0f4; --hover: #eef0f5;
+  --shadow: 0 1px 2px rgba(16, 24, 40, 0.04);
+  --pop: 0 16px 48px rgba(16, 24, 40, 0.18);
+  color-scheme: light;
+}
+:root[data-theme="dark"] {
+  --bg: #1b1c26; --panel: #21222d; --card: #272835; --line: #33354a; --line-strong: #3d4058;
+  --ink: #f2f3f7; --muted: #9ba0b5; --muted-2: #6b7088;
+  --accent: #818cf8; --accent-hover: #a5b4fc; --accent-soft: #2b2a4f; --accent-ink: #11121a;
+  --nav-active-bg: #ffffff; --nav-active-ink: #1d1f2c;
+  --yellow-soft: #3a3322; --yellow-ink: #ffd666;
+  --green: #4ade80; --green-soft: #1f3a2b; --green-ink: #6ee7a0;
+  --red: #f87171; --red-soft: #3d2326; --red-ink: #fca5a5;
+  --track: #33354a; --hover: #32344a;
+  --shadow: none; --pop: 0 16px 48px rgba(0, 0, 0, 0.5);
+  color-scheme: dark;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #1b1c26; --panel: #21222d; --card: #272835; --line: #33354a; --line-strong: #3d4058;
+    --ink: #f2f3f7; --muted: #9ba0b5; --muted-2: #6b7088;
+    --accent: #818cf8; --accent-hover: #a5b4fc; --accent-soft: #2b2a4f; --accent-ink: #11121a;
+    --nav-active-bg: #ffffff; --nav-active-ink: #1d1f2c;
+    --yellow-soft: #3a3322; --yellow-ink: #ffd666;
+    --green: #4ade80; --green-soft: #1f3a2b; --green-ink: #6ee7a0;
+    --red: #f87171; --red-soft: #3d2326; --red-ink: #fca5a5;
+    --track: #33354a; --hover: #32344a;
+    --shadow: none; --pop: 0 16px 48px rgba(0, 0, 0, 0.5);
+    color-scheme: dark;
+  }
+}
+
+@theme inline {
+  --color-bg: var(--bg);
+  --color-panel: var(--panel);
+  --color-card: var(--card);
+  --color-line: var(--line);
+  --color-line-strong: var(--line-strong);
+  --color-ink: var(--ink);
+  --color-muted: var(--muted);
+  --color-muted-2: var(--muted-2);
+  --color-accent: var(--accent);
+  --color-accent-hover: var(--accent-hover);
+  --color-accent-soft: var(--accent-soft);
+  --color-accent-ink: var(--accent-ink);
+  --color-yellow: var(--yellow);
+  --color-yellow-soft: var(--yellow-soft);
+  --color-yellow-ink: var(--yellow-ink);
+  --color-green: var(--green);
+  --color-green-soft: var(--green-soft);
+  --color-green-ink: var(--green-ink);
+  --color-red: var(--red);
+  --color-red-soft: var(--red-soft);
+  --color-red-ink: var(--red-ink);
+  --color-track: var(--track);
+  --color-hover: var(--hover);
+  --font-sans: "Inter Variable", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  --shadow-card: var(--shadow);
+  --shadow-pop: var(--pop);
+  --radius-card: 16px;
+}
+
+@layer base {
+html { -webkit-text-size-adjust: 100%; }
+body {
+  background: var(--bg); color: var(--ink);
+  font-family: var(--font-sans); font-size: 14px; line-height: 1.5;
+  -webkit-font-smoothing: antialiased; font-feature-settings: "cv11", "ss01";
+}
+.num { font-variant-numeric: tabular-nums; }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 8px; }
+button, input, select, textarea { font: inherit; color: inherit; }
+::selection { background: var(--accent-soft); }
+}
+
+@layer components {
+.card { background: var(--card); border: 1px solid var(--line); border-radius: 16px; box-shadow: var(--shadow); }
+.input {
+  width: 100%; min-height: 42px; padding: 9px 12px; border-radius: 10px; border: 1px solid var(--line-strong);
+  background: var(--card); color: var(--ink); outline: none; transition: border-color .15s;
+}
+.input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+.input::placeholder { color: var(--muted-2); }
+.btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: 8px; min-height: 40px; padding: 8px 14px;
+  border-radius: 10px; font-weight: 600; font-size: 13.5px; border: 1px solid var(--line-strong); background: var(--card);
+  cursor: pointer; transition: background .15s, border-color .15s, color .15s; white-space: nowrap;
+}
+.btn:hover { border-color: var(--muted-2); background: var(--hover); }
+.btn-primary:hover, .btn-danger:hover { background: var(--accent-hover); }
+.btn:disabled { opacity: .45; cursor: not-allowed; }
+.btn-primary { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
+.btn-primary:hover { background: var(--accent-hover); border-color: var(--accent-hover); }
+.btn-ghost { border-color: transparent; background: transparent; }
+.btn-ghost:hover { background: var(--hover); border-color: transparent; }
+.btn-danger { background: var(--red); border-color: var(--red); color: #fff; }
+.pill { display: inline-flex; align-items: center; gap: 6px; padding: 3px 10px; border-radius: 999px; font-size: 12px; font-weight: 600; white-space: nowrap; }
+.label { font-size: 12px; font-weight: 600; color: var(--muted); }
+.scrollbar-none { scrollbar-width: none; }
+.scrollbar-none::-webkit-scrollbar { display: none; }
+
+.skeleton { background: linear-gradient(90deg, var(--track) 25%, var(--line) 37%, var(--track) 63%); background-size: 400% 100%; animation: sk 1.4s ease infinite; border-radius: 8px; }
+@keyframes sk { 0% { background-position: 100% 50%; } 100% { background-position: 0 50%; } }
+@keyframes pop-in { from { opacity: 0; transform: translateY(8px) scale(.98); } to { opacity: 1; transform: none; } }
+.pop-in { animation: pop-in .18s ease-out; }
+@media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation-duration: .01ms !important; transition-duration: .01ms !important; } }
+
+}
+
+/* Baris tabel berwarna sesuai rekomendasi (seperti tabel "Customer order" di referensi). */
+@layer components {
+  .nav-active { background: var(--nav-active-bg); color: var(--nav-active-ink); }
+  .nav-item:not(.nav-active):hover { background: var(--hover); }
+  .row-green { background: var(--green-soft); }
+  .row-yellow { background: var(--yellow-soft); }
+  .row-red { background: var(--red-soft); }
+}
+
+.md p + p, .md p + ul, .md ul + p { margin-top: 6px; }
+.md ul { margin: 4px 0 0 18px; list-style: disc; }
+.md strong { font-weight: 650; }
+
+@media print {
+  aside, nav, header .no-print, .no-print, .chat-fab { display: none !important; }
+  body { background: #fff; }
+  .card { box-shadow: none; break-inside: avoid; }
+  main { padding: 0 !important; margin: 0 !important; }
+}

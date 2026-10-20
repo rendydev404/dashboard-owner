@@ -1,0 +1,198 @@
+[
+ {
+  "date_start": "2026-08-26",
+  "date_stop": "2026-08-26",
+  "hourly_stats_aggregated_by_advertiser_time_zone": "09:00:00 - 09:59:59",
+  "amount_spent": {
+   "value": "45777",
+   "unit": "IDR"
+  },
+  "impressions": "3179",
+  "link_click": "44",
+  "omni_purchase": null,
+  "id": "1392053332395676",
+  "name": "Adv Habib Akbar-02 | 8768"
+ },
+ {
+  "date_start": "2026-08-26",
+  "date_stop": "2026-08-26",
+  "hourly_stats_aggregated_by_advertiser_time_zone": "10:00:00 - 10:59:59",
+  "amount_spent": {
+   "value": "4468",
+   "unit": "IDR"
+  },
+  "impressions": "184",
+  "link_click": "8",
+  "omni_purchase": null,
+  "id": "1392053332395676",
+  "name": "Adv Habib Akbar-02 | 8768"
+ },
+ {
+  "date_start": "2026-08-26",
+  "date_stop": "2026-08-26",
+  "hourly_stats_aggregated_by_advertiser_time_zone": "11:00:00 - 11:59:59",
+  "amount_spent": {
+   "value": "3755",
+   "unit": "IDR"
+  },
+  "impressions": "111",
+  "link_click": "5",
+  "omni_purchase": null,
+  "id": "1392053332395676",
+  "name": "Adv Habib Akbar-02 | 8768"
+ },
+ {
+  "date_start": "2026-08-26",
+  "date_stop": "2026-08-26",
+  "hourly_stats_aggregated_by_advertiser_time_zone": "12:00:00 - 12:59:59",
+  "amount_spent": {
+   "value": "2750",
+   "unit": "IDR"
+  },
+  "impressions": "61",
+  "link_click": "3",
+  "omni_purchase": null,
+  "id": "1392053332395676",
+  "name": "Adv Habib Akbar-02 | 8768"
+ },
+ {
+  "date_start": "2026-08-26",
+  "date_stop": "2026-08-26",
+  "hourly_stats_aggregated_by_advertiser_time_zone": "13:00:00 - 13:59:59",
+  "amount_spent": {
+   "value": "9534",
+   "unit": "IDR"
+  },
+  "impressions": "78",
+  "link_click": "7",
+  "omni_purchase": null,
+  "id": "1392053332395676",
+  "name": "Adv Habib Akbar-02 | 8768"
+ },
+ {
+  "date_start": "2026-08-26",
+  "date_stop": "2026-08-26",
+  "hourly_stats_aggregated_by_advertiser_time_zone": "14:00:00 - 14:59:59",
+  "amount_spent": {
+   "value": "7984",
+   "unit": "IDR"
+  },
+  "impressions": "85",
+  "link_click": "3",
+  "omni_purchase": null,
+  "id": "1392053332395676",
+  "name": "Adv Habib Akbar-02 | 8768"
+ },
+ {
+  "date_start": "2026-08-26",
+  "date_stop": "2026-08-26",
+  "hourly_stats_aggregated_by_advertiser_time_zone": "15:00:00 - 15:59:59",
+  "amount_spent": {
+   "value": "3270",
+   "unit": "IDR"
+  },
+  "impressions": "74",
+  "link_click": "1",
+  "omni_purchase": null,
+  "id": "1392053332395676",
+  "name": "Adv Habib Akbar-02 | 8768"
+ },
+ {
+  "date_start": "2026-08-26",
+  "date_stop": "2026-08-26",
+  "hourly_stats_aggregated_by_advertiser_time_zone": "16:00:00 - 16:59:59",
+  "amount_spent": {
+   "value": "6092",
+   "unit": "IDR"
+  },
+  "impressions": "79",
+  "link_click": "4",
+  "omni_purchase": null,
+  "id": "1392053332395676",
+  "name": "Adv Habib Akbar-02 | 8768"
+ },
+ {
+  "date_start": "2026-08-26",
+  "date_stop": "2026-08-26",
+  "hourly_stats_aggregated_by_advertiser_time_zone": "17:00:00 - 17:59:59",
+  "amount_spent": {
+   "value": "8648",
+   "unit": "IDR"
+  },
+  "impressions": "96",
+  "link_click": "3",
+  "omni_purchase": null,
+  "id": "1392053332395676",
+  "name": "Adv Habib Akbar-02 | 8768"
+ },
+ {
+  "date_start": "2026-08-26",
+  "date_stop": "2026-08-26",
+  "hourly_stats_aggregated_by_advertiser_time_zone": "18:00:00 - 18:59:59",
+  "amount_spent": {
+   "value": "10677",
+   "unit": "IDR"
+  },
+  "impressions": "117",
+  "link_click": "9",
+  "omni_purchase": null,
+  "id": "1392053332395676",
+  "name": "Adv Habib Akbar-02 | 8768"
+ },
+ {
+  "date_start": "2026-08-26",
+  "date_stop": "2026-08-26",
+  "hourly_stats_aggregated_by_advertiser_time_zone": "19:00:00 - 19:59:59",
+  "amount_spent": {
+   "value": "7824",
+   "unit": "IDR"
+  },
+  "impressions": "137",
+  "link_click": "10",
+  "omni_purchase": null,
+  "id": "1392053332395676",
+  "name": "Adv Habib Akbar-02 | 8768"
+ },
+ {
+  "date_start": "2026-08-26",
+  "date_stop": "2026-08-26",
+  "hourly_stats_aggregated_by_advertiser_time_zone": "20:00:00 - 20:59:59",
+  "amount_spent": {
+   "value": "14441",
+   "unit": "IDR"
+  },
+  "impressions": "168",
+  "link_click": "5",
+  "omni_purchase": "1",
+  "id": "1392053332395676",
+  "name": "Adv Habib Akbar-02 | 8768"
+ },
+ {
+  "date_start": "2026-08-20",
+  "date_stop": "2026-08-20",
+  "hourly_stats_aggregated_by_advertiser_time_zone": "null",
+  "amount_spent": {
+   "value": "0",
+   "unit": "IDR"
+  },
+  "impressions": "0",
+  "link_click": null,
+  "omni_purchase": null,
+  "id": "1392053332395676",
+  "name": "Adv Habib Akbar-02 | 8768"
+ },
+ {
+  "date_start": "2026-08-21",
+  "date_stop": "2026-08-21",
+  "hourly_stats_aggregated_by_advertiser_time_zone": "null",
+  "amount_spent": {
+   "value": "0",
+   "unit": "IDR"
+  },
+  "impressions": "0",
+  "link_click": null,
+  "omni_purchase": null,
+  "id": "1392053332395676",
+  "name": "Adv Habib Akbar-02 | 8768"
+ }
+]

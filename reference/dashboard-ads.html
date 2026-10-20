@@ -1,0 +1,1010 @@
+<!doctype html>
+<html lang="id">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>Dashboard Iklan</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<style>
+:root{
+  --bg:#f5f6f8; --card:#ffffff; --ink:#111827; --muted:#6b7280; --line:#e5e7eb;
+  --brand:#e85d1c; --brand-soft:#fdeee6; --blue:#2563eb; --blue-soft:#e8efff;
+  --green:#059669; --green-soft:#e3f6ef; --red:#dc2626; --red-soft:#fde8e8;
+  --amber:#b45309; --amber-soft:#fdf2df; --violet:#7c3aed; --violet-soft:#f1eafe;
+  --shadow:0 1px 2px rgba(16,24,40,.05),0 1px 3px rgba(16,24,40,.06);
+  --pop:0 12px 40px rgba(16,24,40,.18);
+}
+:root[data-theme="dark"]{
+  --bg:#0c0f14; --card:#151a22; --ink:#e8ebf0; --muted:#8b95a5; --line:#252c38;
+  --brand:#ff7a3d; --brand-soft:#2a1a12; --blue:#6b9bff; --blue-soft:#162036;
+  --green:#34d399; --green-soft:#0f2a22; --red:#f87171; --red-soft:#2d1515;
+  --amber:#fbbf24; --amber-soft:#2a2210; --violet:#a78bfa; --violet-soft:#211a33; --shadow:none;
+  --pop:0 12px 40px rgba(0,0,0,.5);
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#0c0f14; --card:#151a22; --ink:#e8ebf0; --muted:#8b95a5; --line:#252c38;
+    --brand:#ff7a3d; --brand-soft:#2a1a12; --blue:#6b9bff; --blue-soft:#162036;
+    --green:#34d399; --green-soft:#0f2a22; --red:#f87171; --red-soft:#2d1515;
+    --amber:#fbbf24; --amber-soft:#2a2210; --violet:#a78bfa; --violet-soft:#211a33; --shadow:none;
+    --pop:0 12px 40px rgba(0,0,0,.5);
+  }
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:var(--bg);color:var(--ink);font-family:"Plus Jakarta Sans",system-ui,sans-serif;font-size:14px;line-height:1.5;-webkit-font-smoothing:antialiased}
+.num{font-family:"JetBrains Mono",ui-monospace,monospace;font-variant-numeric:tabular-nums}
+.wrap{max-width:1240px;margin:0 auto;padding:20px 16px 90px}
+header.top{display:flex;flex-wrap:wrap;gap:14px;align-items:center;justify-content:space-between;margin-bottom:14px}
+.brand{display:flex;gap:12px;align-items:center}
+.logo{width:40px;height:40px;border-radius:10px;background:var(--brand);color:#fff;display:grid;place-items:center;font-weight:800}
+.brand h1{font-size:18px;font-weight:800;letter-spacing:-.01em}
+.brand p{color:var(--muted);font-size:12.5px}
+.actions{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.btn,select,input{border:1px solid var(--line);background:var(--card);color:var(--ink);padding:8px 12px;border-radius:9px;font:600 13px "Plus Jakarta Sans",system-ui,sans-serif;color-scheme:light dark}
+input{font-weight:500}
+.btn,select{cursor:pointer}
+.btn:hover,select:hover{border-color:var(--muted)}
+.btn:disabled{opacity:.4;cursor:not-allowed}
+.btn.icon{padding:8px 11px}
+.btn.primary{background:var(--brand);border-color:var(--brand);color:#fff}
+.btn.ghost{border-color:transparent;background:none;color:var(--muted);padding:4px 8px}
+.btn.ghost:hover{color:var(--red)}
+.status{display:inline-flex;align-items:center;gap:6px;font-size:12px;font-weight:600;padding:4px 10px;border-radius:99px;background:var(--green-soft);color:var(--green)}
+.status.off{background:var(--red-soft);color:var(--red)}
+.status i{width:7px;height:7px;border-radius:50%;background:currentColor;display:block}
+.toolbar{display:flex;flex-wrap:wrap;gap:10px 14px;align-items:flex-end;margin-bottom:14px}
+.field{display:flex;flex-direction:column;gap:4px;min-width:0}
+.field>span{font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.05em}
+.range{display:flex;gap:6px;align-items:center;flex-wrap:wrap}
+.range input{padding:7px 9px}
+.cmp{font-size:12px;color:var(--muted);margin-left:auto;align-self:center}
+nav.tabs{display:flex;gap:4px;border-bottom:1px solid var(--line);margin-bottom:18px;overflow-x:auto;scrollbar-width:none}
+nav.tabs button{background:none;border:0;padding:10px 14px;font:600 13.5px "Plus Jakarta Sans",system-ui,sans-serif;color:var(--muted);cursor:pointer;border-bottom:2px solid transparent;white-space:nowrap}
+nav.tabs button.on{color:var(--ink);border-color:var(--brand)}
+.panel{display:none}.panel.on{display:block}
+.grid{display:grid;gap:12px}
+.kpis{grid-template-columns:repeat(4,1fr)}
+.k3{grid-template-columns:repeat(3,1fr);margin-bottom:12px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:16px;box-shadow:var(--shadow)}
+.kpi .lbl{font-size:12px;color:var(--muted);font-weight:600;text-transform:uppercase;letter-spacing:.04em}
+.kpi .val{font-size:22px;font-weight:700;margin-top:4px;letter-spacing:-.02em}
+.kpi .sub{font-size:12px;color:var(--muted);margin-top:2px}
+.kpi .dl{font-size:11.5px;font-weight:700;margin-top:6px}
+.kpi.hl{border-color:var(--brand);background:linear-gradient(180deg,var(--brand-soft),var(--card) 70%)}
+.pos{color:var(--green)}.neg{color:var(--red)}.neu{color:var(--muted)}
+.row2{grid-template-columns:2fr 1fr;margin-top:12px}
+.row-even{grid-template-columns:1fr 1fr;margin-top:12px}
+.card h2{font-size:14.5px;font-weight:700}
+.card .hint{font-size:12px;color:var(--muted);margin-bottom:12px}
+.chart{position:relative;height:280px}
+table{width:100%;border-collapse:collapse;font-size:13px}
+th{text-align:left;font-size:11.5px;text-transform:uppercase;letter-spacing:.04em;color:var(--muted);font-weight:700;padding:10px;border-bottom:1px solid var(--line);white-space:nowrap;user-select:none;vertical-align:bottom}
+th[data-k]{cursor:pointer}
+th.r,td.r{text-align:right}
+td{padding:11px 10px;border-bottom:1px solid var(--line);vertical-align:middle}
+tbody tr:last-child td{border-bottom:0}
+tfoot td{font-weight:700;border-top:2px solid var(--line)}
+.tbl{overflow-x:auto;margin:0 -16px;padding:0 16px}
+.badge{display:inline-block;font-size:11.5px;font-weight:700;padding:3px 8px;border-radius:6px;white-space:nowrap}
+.b-green{background:var(--green-soft);color:var(--green)}
+.b-red{background:var(--red-soft);color:var(--red)}
+.b-amber{background:var(--amber-soft);color:var(--amber)}
+.b-blue{background:var(--blue-soft);color:var(--blue)}
+.b-violet{background:var(--violet-soft);color:var(--violet)}
+.b-gray{background:var(--bg);color:var(--muted)}
+.bar{height:6px;border-radius:4px;background:var(--line);overflow:hidden;margin-top:6px;min-width:80px}
+.bar span{display:block;height:100%;background:var(--brand);border-radius:4px}
+.sm{display:block;color:var(--muted);font-size:11.5px;font-weight:500;text-transform:none;letter-spacing:0}
+.pl{min-width:560px}
+.pl td{padding:10px 8px}
+.pl th{padding:10px 8px}
+.pl .grp td{font-weight:700;background:var(--bg)}
+.pl .total td{font-size:15px;font-weight:800;border-top:2px solid var(--ink)}
+.pl td:first-child{color:var(--muted)}
+.pl .grp td:first-child,.pl .total td:first-child{color:var(--ink)}
+.pl .tot{background:var(--brand-soft)}
+.prod-name a{color:var(--ink);font-weight:600;text-decoration:none}
+.prod-name a:hover{color:var(--brand)}
+.prod-name b{font-weight:600}
+.log{max-height:520px;overflow-y:auto}
+.log li{list-style:none;display:grid;grid-template-columns:86px 1fr;gap:10px;padding:10px 0;border-bottom:1px solid var(--line)}
+.log li:last-child{border:0}
+.log time{color:var(--muted);font-size:12px}
+.log p{color:var(--muted);font-size:12.5px}
+.rules{display:grid;gap:8px}
+.rule{display:flex;justify-content:space-between;gap:10px;padding:10px 12px;border:1px solid var(--line);border-radius:10px;font-size:13px}
+.rule span:last-child{font-weight:700}
+.acc-h{display:flex;justify-content:space-between;align-items:center;margin:14px 0 8px;font-weight:700}
+.acc-h:first-child{margin-top:0}
+.insight{padding:12px;border-radius:10px;background:var(--blue-soft);font-size:13px;margin-bottom:8px}
+.insight.warn{background:var(--amber-soft)}.insight.bad{background:var(--red-soft)}.insight.good{background:var(--green-soft)}
+.insight b{display:block}
+.empty{padding:30px;text-align:center;color:var(--muted)}
+.form{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.form .full{grid-column:1/-1}
+.form input,.form select{width:100%}
+.hist li{list-style:none;display:flex;gap:10px;align-items:center;justify-content:space-between;padding:9px 0;border-bottom:1px solid var(--line);font-size:13px}
+.hist li:last-child{border:0}
+.hist .meta{color:var(--muted);font-size:12px}
+.note{font-size:12px;color:var(--muted);padding:10px 12px;border:1px dashed var(--line);border-radius:10px;margin-top:12px}
+footer{margin-top:28px;color:var(--muted);font-size:12px;text-align:center}
+
+/* chat */
+.fab{position:fixed;right:20px;bottom:20px;z-index:40;display:flex;align-items:center;gap:8px;padding:12px 18px;border-radius:99px;border:0;background:var(--brand);color:#fff;font:700 14px "Plus Jakarta Sans",system-ui,sans-serif;cursor:pointer;box-shadow:var(--pop)}
+.fab svg{width:18px;height:18px}
+.chat{position:fixed;right:20px;bottom:20px;z-index:50;width:400px;height:min(620px,calc(100vh - 40px));display:flex;flex-direction:column;background:var(--card);border:1px solid var(--line);border-radius:16px;box-shadow:var(--pop);overflow:hidden}
+.chat[hidden]{display:none}
+.chat-h{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:12px 14px;border-bottom:1px solid var(--line)}
+.chat-h b{font-size:14.5px}
+.chat-b{flex:1;overflow-y:auto;padding:14px;display:flex;flex-direction:column;gap:10px}
+.msg{max-width:88%;padding:10px 12px;border-radius:12px;font-size:13.5px;line-height:1.55}
+.msg.bot{background:var(--bg);align-self:flex-start;border-bottom-left-radius:4px}
+.msg.me{background:var(--brand);color:#fff;align-self:flex-end;border-bottom-right-radius:4px}
+.msg ul{margin:6px 0 0 16px}
+.msg .ctx{display:block;color:var(--muted);font-size:11px;margin-bottom:4px;font-weight:600}
+.typing{color:var(--muted);font-size:12.5px;align-self:flex-start}
+.chips{display:flex;gap:6px;overflow-x:auto;padding:8px 14px 0;scrollbar-width:none}
+.chips button{flex:none;border:1px solid var(--line);background:var(--card);color:var(--ink);border-radius:99px;padding:6px 10px;font:600 12px "Plus Jakarta Sans",system-ui,sans-serif;cursor:pointer;white-space:nowrap}
+.chips button:hover{border-color:var(--brand);color:var(--brand)}
+.chat-f{display:flex;gap:8px;padding:10px 14px 14px}
+.chat-f input{flex:1;min-width:0}
+
+@media (max-width:900px){.kpis{grid-template-columns:repeat(2,1fr)}.k3{grid-template-columns:1fr}.row2,.row-even{grid-template-columns:1fr}.cmp{margin-left:0;width:100%}}
+@media (max-width:520px){.chat{inset:0;width:auto;height:auto;border-radius:0}.form{grid-template-columns:1fr}.fab{right:16px;bottom:16px}}
+@media (max-width:420px){.kpi .val{font-size:19px}.range input{width:132px}}
+@media print{nav.tabs,.actions,.toolbar .btn,.fab,.chat,.no-print{display:none!important}.panel{display:block!important;break-inside:avoid;margin-bottom:16px}body{background:#fff}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="top">
+    <div class="brand">
+      <div class="logo">AI</div>
+      <div>
+        <h1 id="accName">Dashboard Iklan</h1>
+        <p id="subline"></p>
+      </div>
+    </div>
+    <div class="actions">
+      <span class="status" id="botStatus"><i></i><span>Bot aktif</span></span>
+      <button class="btn" onclick="exportCSV()">Unduh CSV</button>
+      <button class="btn" onclick="window.print()">Unduh PDF</button>
+      <button class="btn icon" id="themeBtn" aria-label="Ganti tema">◐</button>
+    </div>
+  </header>
+
+  <div class="card toolbar">
+    <label class="field"><span>Akun iklan</span><select id="selAcc"></select></label>
+    <label class="field"><span>Periode</span>
+      <select id="selPreset">
+        <option value="today">Hari ini</option>
+        <option value="yesterday">Kemarin</option>
+        <option value="7d">7 hari terakhir</option>
+        <option value="thisweek">Minggu ini</option>
+        <option value="lastweek">Minggu lalu</option>
+        <option value="30d">30 hari terakhir</option>
+        <option value="thismonth">Bulan ini</option>
+        <option value="lastmonth">Bulan lalu</option>
+        <option value="90d">90 hari terakhir</option>
+        <option value="custom">Custom</option>
+      </select>
+    </label>
+    <div class="field"><span>Tanggal</span>
+      <div class="range">
+        <button class="btn icon" id="prevBtn" aria-label="Periode sebelumnya">‹</button>
+        <input type="date" id="dStart"><span class="neu">–</span><input type="date" id="dEnd">
+        <button class="btn icon" id="nextBtn" aria-label="Periode berikutnya">›</button>
+      </div>
+    </div>
+    <span class="cmp" id="cmpLbl"></span>
+  </div>
+
+  <nav class="tabs" id="tabs">
+    <button data-t="ringkasan" class="on">Ringkasan</button>
+    <button data-t="iklan">Kampanye</button>
+    <button data-t="jam">Per Jam</button>
+    <button data-t="produk">Produk &amp; Jasa</button>
+    <button data-t="labarugi">Laba Rugi</button>
+    <button data-t="bot">Bot AI</button>
+  </nav>
+
+  <section class="panel on" id="p-ringkasan">
+    <div class="grid kpis" id="kpis"></div>
+    <div class="grid row2">
+      <div class="card">
+        <h2 id="trendTitle">Tren harian</h2>
+        <p class="hint" id="trendHint"></p>
+        <div class="chart"><canvas id="cDaily"></canvas></div>
+      </div>
+      <div class="card">
+        <h2>Insight bot</h2>
+        <p class="hint">Dibaca otomatis dari periode yang dipilih</p>
+        <div id="insights"></div>
+      </div>
+    </div>
+  </section>
+
+  <section class="panel" id="p-iklan">
+    <div class="card">
+      <h2>Performa kampanye</h2>
+      <p class="hint">Klik judul kolom untuk urutkan. Rekomendasi pakai aturan bot tiap akun; untuk periode 1 hari anggap sebagai sinyal awal saja.</p>
+      <div class="tbl"><table id="tCamp"></table></div>
+    </div>
+  </section>
+
+  <section class="panel" id="p-jam">
+    <div class="card">
+      <h2>Performa per jam</h2>
+      <p class="hint">Akumulasi per jam selama periode terpilih. Bar = spend, garis = hasil. Dipakai bot untuk atur jadwal tayang.</p>
+      <div class="chart" style="height:320px"><canvas id="cHour"></canvas></div>
+    </div>
+    <div class="grid row-even">
+      <div class="card"><h2>Jam paling cuan</h2><p class="hint">Biaya per hasil terendah</p><div class="tbl"><table id="tHourBest"></table></div></div>
+      <div class="card"><h2>Jam paling boros</h2><p class="hint">Spend tanpa / sedikit hasil</p><div class="tbl"><table id="tHourWorst"></table></div></div>
+    </div>
+  </section>
+
+  <section class="panel" id="p-produk">
+    <div class="card">
+      <h2>Produk &amp; jasa terlaris</h2>
+      <p class="hint">Produk digital AI otomatis dari lynk.id, jasa AI dari input manual. Bar = porsi dari omzet.</p>
+      <div class="tbl"><table id="tProd"></table></div>
+    </div>
+  </section>
+
+  <section class="panel" id="p-labarugi">
+    <div class="grid k3" id="plCards"></div>
+    <div class="grid row2" style="margin-top:0">
+      <div class="card">
+        <h2>Laporan laba rugi per lini bisnis</h2>
+        <p class="hint" id="plPeriod"></p>
+        <div class="tbl"><table class="pl" id="tPL"></table></div>
+      </div>
+      <div class="card">
+        <h2>Angka kunci gabungan</h2>
+        <p class="hint">Patokan untuk keputusan scale / stop</p>
+        <div id="unitEco"></div>
+      </div>
+    </div>
+    <div class="grid row-even no-print">
+      <div class="card">
+        <h2>Input penjualan jasa AI</h2>
+        <p class="hint">Masuk ke laba rugi lini Jasa AI. Angka boleh ditulis 7.500.000, 7,5jt atau 750rb.</p>
+        <form class="form" id="fSale" autocomplete="off">
+          <label class="field"><span>Tanggal</span><input type="date" name="date" required></label>
+          <label class="field"><span>Akun jasa</span><select name="acc" required></select></label>
+          <label class="field full"><span>Jasa</span><input name="product" list="jasaList" placeholder="Pilih atau ketik nama jasa" required><datalist id="jasaList"></datalist></label>
+          <label class="field"><span>Nama klien</span><input name="client" placeholder="PT / nama klien"></label>
+          <label class="field"><span>Sumber klien</span><select name="source"><option>Iklan</option><option>Organik</option><option>Referral</option></select></label>
+          <label class="field"><span>Nilai deal (Rp)</span><input name="revenue" inputmode="decimal" placeholder="7,5jt" required></label>
+          <label class="field"><span>Biaya pengerjaan / HPP</span><input name="cogs" inputmode="decimal" placeholder="kosong = HPP standar"></label>
+          <button class="btn primary full">Simpan penjualan jasa</button>
+        </form>
+      </div>
+      <div class="card">
+        <h2>Input biaya lain</h2>
+        <p class="hint">Biaya di luar iklan &amp; operasional rutin, misal freelancer, fee sales, refund.</p>
+        <form class="form" id="fCost" autocomplete="off">
+          <label class="field"><span>Tanggal</span><input type="date" name="date" required></label>
+          <label class="field"><span>Lini bisnis</span><select name="line"><option value="jasa">Jasa AI</option><option value="digital">Produk Digital AI</option></select></label>
+          <label class="field"><span>Nama biaya</span><input name="name" placeholder="Fee freelancer" required></label>
+          <label class="field"><span>Jumlah (Rp)</span><input name="amount" inputmode="decimal" placeholder="500rb" required></label>
+          <button class="btn primary full">Simpan biaya</button>
+        </form>
+        <h2 style="margin-top:18px">Riwayat input manual</h2>
+        <ul class="hist" id="hist"></ul>
+      </div>
+    </div>
+  </section>
+
+  <section class="panel" id="p-bot">
+    <div class="grid row-even" style="margin-top:0">
+      <div class="card">
+        <h2>Aturan bot</h2>
+        <p class="hint">Bisa diubah lewat chat, misal "target roas 3" atau "batas cpa 40rb"</p>
+        <div id="rules"></div>
+      </div>
+      <div class="card">
+        <h2>Log aksi bot</h2>
+        <p class="hint">Aksi yang dieksekusi di periode terpilih</p>
+        <ul class="log" id="log"></ul>
+      </div>
+    </div>
+  </section>
+
+  <footer>Laporan internal · jangan dibagikan</footer>
+</div>
+
+<button class="fab" id="chatFab" aria-label="Buka chat bot">
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a8 8 0 0 1-11.6 7.1L4 20l1-4.6A8 8 0 1 1 21 12z"/></svg>
+  Tanya bot
+</button>
+<aside class="chat" id="chat" hidden aria-label="Chat bot AI">
+  <div class="chat-h">
+    <div><b>Bot AI Iklan</b><span class="sm" id="chatMode"></span></div>
+    <button class="btn icon" id="chatClose" aria-label="Tutup">✕</button>
+  </div>
+  <div class="chat-b" id="chatBody"></div>
+  <div class="chips" id="chips"></div>
+  <form class="chat-f" id="chatForm" autocomplete="off">
+    <input id="chatIn" placeholder="Contoh: laba bulan lalu berapa?">
+    <button class="btn primary">Kirim</button>
+  </form>
+</aside>
+
+<script>
+/* =====================================================================
+   INTEGRASI BACKEND (kosongkan = mode demo pakai data contoh)
+   API.data   GET  → { accounts:[...], manualCosts:[...] }
+   API.chat   POST ← { message, history, context }
+              → { reply:"teks", actions:[{type:"setAccount",account}|{type:"setRange",preset}|{type:"setRange",start,end}], refresh:true }
+              Backend inilah yang pegang AI (mis. Claude API) + eksekusi ke Meta Ads API.
+   API.manual POST ← { kind:"sale"|"cost"|"delete", ...data }  lalu dashboard reload API.data
+
+   Format 1 akun:
+   {
+     id, name, type:"digital"|"jasa", revenueSource:"lynk.id"|"Input manual",
+     bot:{active:true},
+     settings:{ targetRoas, maxCpa, maxCpl, feePct, adTaxPct, scaleStepPct, killAfterSpend },
+     campaigns:[{name,status}], products:[{name,price,url?,cogs}], fixedCosts:[{name,monthly}],
+     campaignDaily:[{date,campaign,spend,impressions,clicks,leads,purchases,revenue}],
+     sales:[{id?,date,product,qty,revenue,cogs?,client?,source?,manual?}],
+     hourly:[{date,hour,spend,clicks,leads,purchases}],
+     botLog:[{at:"YYYY-MM-DDTHH:MM",action,target,reason}]
+   }
+   manualCosts:[{id,date,line:"digital"|"jasa",name,amount}]
+   ===================================================================== */
+const API = { data:null, chat:null, manual:null };
+
+/* ---------- tanggal ---------- */
+const NOW = new Date();
+const TODAY = new Date(NOW.getFullYear(), NOW.getMonth(), NOW.getDate());
+const pad = n=>String(n).padStart(2,"0");
+const key = d=>`${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
+const parse = s=>{const [y,m,d]=s.split("-").map(Number);return new Date(y,m-1,d)};
+const addDays = (d,n)=>{const x=new Date(d);x.setDate(x.getDate()+n);return x};
+const lenDays = (s,e)=>Math.round((parse(e)-parse(s))/864e5)+1;
+const lastOfMonth = (y,m)=>new Date(y,m+1,0);
+const TODAY_K = key(TODAY);
+const nowStamp = ()=>{const d=new Date();return key(d)+"T"+pad(d.getHours())+":"+pad(d.getMinutes())};
+
+/* ---------- data contoh ---------- */
+function rng(seed){return()=>{seed|=0;seed=seed+0x6D2B79F5|0;let t=Math.imul(seed^seed>>>15,1|seed);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296}}
+const HW=[.2,.12,.08,.06,.06,.1,.3,.55,.75,.85,.9,1,1.1,1,.9,.85,.9,1,1.15,1.35,1.5,1.45,1.1,.6];
+
+function sampleDB(){
+  const R = rng(42), DAYS = 180;
+  const pick = arr=>{let t=arr.reduce((s,x)=>s+x.w,0),r=R()*t;for(const x of arr){r-=x.w;if(r<=0)return x}return arr[arr.length-1]};
+  const CLIENTS=["PT Maju Digital","CV Sinar Abadi","Klinik Sehat Utama","Toko Berkah Online","PT Nusantara Retail","Kopi Kenangan Lokal","Agensi Kreatif ID","Rumah Belajar Pintar"];
+  const defs = [
+    {id:"8768", name:"Adv Habib Akbar-02", type:"digital", revenueSource:"lynk.id", base:420000,
+     settings:{targetRoas:2.5,maxCpa:45000,maxCpl:null,feePct:0,adTaxPct:11,scaleStepPct:20,killAfterSpend:100000},
+     campaigns:[
+      {name:"BUNDLE | Broad | Purchase",status:"ACTIVE",w:.35,ctr:.015,cpa:31000},
+      {name:"Ecourse AI Agent | LAL 1%",status:"ACTIVE",w:.22,ctr:.014,cpa:50000},
+      {name:"Prompt Pack | Interest AI",status:"ACTIVE",w:.17,ctr:.013,cpa:29000},
+      {name:"Retarget | Visitor 14d",status:"ACTIVE",w:.1,ctr:.019,cpa:24000},
+      {name:"Template Konten | Test Kreatif",status:"PAUSED",w:.1,ctr:.011,cpa:95000,stopDaysAgo:5},
+      {name:"Ebook AI | Advantage+",status:"ACTIVE",w:.06,ctr:.012,cpa:46000,startDaysAgo:40}],
+     products:[
+      {name:"Bundle AI Creator (All in One)",url:"https://lynk.id/spbaicreator",price:149000,cogs:0,w:.4},
+      {name:"Ecourse AI Agent",url:"https://lynk.id/spbaicreator",price:199000,cogs:0,w:.17},
+      {name:"Prompt Pack Konten Viral",url:"https://lynk.id/spbaicreator",price:49000,cogs:0,w:.24},
+      {name:"Template Konten 30 Hari",url:"https://lynk.id/spbaicreator",price:79000,cogs:0,w:.09},
+      {name:"Ebook Cuan dari AI",url:"https://lynk.id/spbaicreator",price:59000,cogs:0,w:.1}],
+     fixedCosts:[{name:"Langganan AI & API",monthly:450000},{name:"Server / hosting bot",monthly:150000},{name:"Tools desain & editing",monthly:120000}]},
+    {id:"5521", name:"Adv Jasa AI Agent", type:"jasa", revenueSource:"Input manual", base:300000,
+     settings:{targetRoas:4,maxCpa:1500000,maxCpl:60000,feePct:0,adTaxPct:11,scaleStepPct:20,killAfterSpend:300000},
+     campaigns:[
+      {name:"Leads WA | Jasa AI Agent | Broad",status:"ACTIVE",w:.5,ctr:.012,cpl:38000,close:.035},
+      {name:"Leads WA | Corporate | LAL 2%",status:"ACTIVE",w:.35,ctr:.009,cpl:66000,close:.05},
+      {name:"Retarget | Engager IG 30d",status:"ACTIVE",w:.15,ctr:.016,cpl:27000,close:.03}],
+     products:[
+      {name:"Jasa Bikin AI Agent (Basic)",price:7500000,cogs:2500000,w:.55},
+      {name:"Paket AI Agent Corporate",price:25000000,cogs:9000000,w:.15},
+      {name:"Konsultasi AI 1 Jam",price:750000,cogs:0,w:.3}],
+     fixedCosts:[{name:"Gaji admin CS",monthly:2500000},{name:"Tools CRM & WA API",monthly:400000}]}
+  ];
+  const ACTIONS=[
+    ["Scale +20%","ROAS di atas target 3 hari berturut-turut"],
+    ["Pause iklan","Biaya per hasil lewat batas, iklan dimatikan"],
+    ["Jadwal tayang","Budget dikurangi jam 00–05 karena hasil rendah"],
+    ["Duplikat iklan","Kreatif CTR tinggi diuji ke audiens baru"],
+    ["Notifikasi","Frekuensi di atas 3,5, kreatif perlu diganti"]];
+
+  const accounts = defs.map(a=>{
+    const campaignDaily=[], sales=[], hourly=[], botLog=[];
+    for(let i=DAYS-1;i>=0;i--){
+      const dd=addDays(TODAY,-i), date=key(dd);
+      const hrs = i===0 ? NOW.getHours()+1 : 24;
+      const frac = i===0 ? HW.slice(0,hrs).reduce((s,x)=>s+x,0)/HW.reduce((s,x)=>s+x,0) : 1;
+      const trend = .75 + (DAYS-i)/DAYS*.5, wk=[1.1,.95,.95,1,1,1.05,1.15][dd.getDay()];
+      const daySales={}; const T={spend:0,clicks:0,leads:0,purchases:0};
+      a.campaigns.forEach(c=>{
+        if(c.startDaysAgo!=null && i>c.startDaysAgo) return;
+        if(c.stopDaysAgo!=null && i<c.stopDaysAgo) return;
+        const spend=Math.round(a.base*c.w*trend*wk*(.75+R()*.5)*frac);
+        const impressions=Math.round(spend*(.35+R()*.15));
+        const clicks=Math.round(impressions*c.ctr*(.8+R()*.4));
+        let leads=0, purchases=0, revenue=0;
+        if(a.type==="jasa"){
+          leads=Math.round(spend/c.cpl*(.7+R()*.6));
+          for(let l=0;l<leads;l++) if(R()<c.close){
+            purchases++; const p=pick(a.products); revenue+=p.price;
+            sales.push({id:"s"+date+"-"+sales.length,date,product:p.name,qty:1,revenue:p.price,cogs:p.cogs,client:CLIENTS[Math.floor(R()*CLIENTS.length)],source:"Iklan",manual:true});
+          }
+        }else{
+          purchases=Math.max(0,Math.round(spend/c.cpa*(.7+R()*.6)));
+          for(let k=0;k<purchases;k++){ const p=pick(a.products); revenue+=p.price; if(R()<.9){(daySales[p.name]=daySales[p.name]||{qty:0,rev:0}).qty++; daySales[p.name].rev+=p.price;} }
+        }
+        campaignDaily.push({date,campaign:c.name,spend,impressions,clicks,leads,purchases,revenue});
+        T.spend+=spend;T.clicks+=clicks;T.leads+=leads;T.purchases+=purchases;
+      });
+      Object.entries(daySales).forEach(([product,v])=>sales.push({date,product,qty:v.qty,revenue:v.rev}));
+      const ws=HW.slice(0,hrs), wsum=ws.reduce((s,x)=>s+x,0), conv=ws.map(w=>({w:Math.pow(w,1.6)}));
+      const H=ws.map((w,h)=>({date,hour:h,spend:Math.round(T.spend*w/wsum),clicks:Math.round(T.clicks*w/wsum),leads:0,purchases:0}));
+      for(let k=0;k<T.purchases;k++) H[conv.indexOf(pick(conv))].purchases++;
+      for(let k=0;k<T.leads;k++) H[conv.indexOf(pick(conv))].leads++;
+      hourly.push(...H);
+    }
+    for(let n=0;n<40;n++){
+      const ago=Math.floor(R()*75), hr=ago===0?Math.floor(R()*(NOW.getHours()+1)):Math.floor(R()*24);
+      const [action,reason]=ACTIONS[Math.floor(R()*ACTIONS.length)];
+      const target=action==="Jadwal tayang"?"Semua kampanye":a.campaigns[Math.floor(R()*a.campaigns.length)].name;
+      botLog.push({at:key(addDays(TODAY,-ago))+"T"+pad(hr)+":"+pad(Math.floor(R()*60)),action,target,reason});
+    }
+    const {base,...rest}=a;
+    return {...rest, bot:{active:true},
+      campaigns:a.campaigns.map(c=>({name:c.name,status:c.status})),
+      products:a.products.map(({w,...p})=>p),
+      campaignDaily, sales, hourly, botLog};
+  });
+  const manualCosts=[];
+  for(let m=0;m<6;m++){
+    manualCosts.push({id:"c"+m+"a",date:key(addDays(TODAY,-(m*30+8))),line:"jasa",name:"Fee freelancer developer",amount:1500000});
+    manualCosts.push({id:"c"+m+"b",date:key(addDays(TODAY,-(m*30+15))),line:"digital",name:"Refund pembeli",amount:149000});
+  }
+  return {accounts, manualCosts};
+}
+
+/* ---------- helpers ---------- */
+const $ = s=>document.querySelector(s);
+const div = (a,b)=>b?a/b:0;
+const rp = n=>(n<0?"-":"")+"Rp"+Math.round(Math.abs(n)).toLocaleString("id-ID");
+const rpk = n=>{if(!isFinite(n))return "—";const a=Math.abs(n),s=n<0?"-":"";if(a>=1e9)return s+"Rp"+(a/1e9).toFixed(2).replace(".",",")+" M";if(a>=1e6)return s+"Rp"+(a/1e6).toFixed(2).replace(".",",")+" jt";if(a>=1e3)return s+"Rp"+Math.round(a/1e3)+" rb";return s+"Rp"+Math.round(a)};
+const nf = n=>Math.round(n).toLocaleString("id-ID");
+const dec = (n,d=2)=>(isFinite(n)?n:0).toFixed(d).replace(".",",");
+const pct = n=>dec(n*100,1)+"%";
+const esc = s=>String(s??"").replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+const cssv = v=>getComputedStyle(document.documentElement).getPropertyValue(v).trim();
+const fmtD = (s,yr=true)=>parse(s).toLocaleDateString("id-ID",{day:"numeric",month:"short",...(yr?{year:"numeric"}:{})});
+const fmtR = (s,e)=>s===e?fmtD(s):fmtD(s,parse(s).getFullYear()!==parse(e).getFullYear())+" – "+fmtD(e);
+const uid = ()=>"m"+Date.now().toString(36)+Math.random().toString(36).slice(2,6);
+function parseRp(v){
+  let s=String(v||"").toLowerCase().replace(/rp|\s/g,"");
+  if(!s) return 0;
+  const m=s.match(/^([\d.,]+)(jt|juta|rb|ribu|k|m|miliar)?$/);
+  if(!m) return Number(s.replace(/\D/g,""))||0;
+  let [ ,n,u]=m;
+  if(u){ n=Number(n.replace(/\./g,"").replace(",","."))||0; return Math.round(n*({jt:1e6,juta:1e6,rb:1e3,ribu:1e3,k:1e3,m:1e9,miliar:1e9}[u])); }
+  return Number(n.replace(/[.,]/g,""))||0;
+}
+
+let DB, R0, charts=[];
+const state = {acc:"all", preset:"7d", start:null, end:null};
+const LINES = {digital:{label:"Produk Digital AI",src:"Otomatis · lynk.id"}, jasa:{label:"Jasa AI",src:"Input manual"}};
+
+/* ---------- penyimpanan input manual (mode demo) ---------- */
+const MKEY="adsManualV1";
+function loadLocalManual(){try{return JSON.parse(localStorage.getItem(MKEY)||"{}")}catch(_){return {}}}
+function saveLocalManual(){
+  if(API.manual) return;
+  const sales=DB.accounts.flatMap(a=>a.sales.filter(s=>s.local).map(s=>({...s,acc:a.id})));
+  const costs=DB.manualCosts.filter(c=>c.local);
+  try{localStorage.setItem(MKEY,JSON.stringify({sales,costs}))}catch(_){}
+}
+function mergeLocalManual(){
+  if(API.manual) return;
+  const m=loadLocalManual();
+  (m.sales||[]).forEach(s=>{const a=DB.accounts.find(x=>x.id===s.acc); if(a){const {acc,...r}=s; a.sales.push(r)}});
+  DB.manualCosts.push(...(m.costs||[]));
+}
+async function postManual(body){
+  const r=await fetch(API.manual,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)});
+  if(!r.ok) throw new Error("HTTP "+r.status);
+  await loadData();
+}
+
+/* ---------- periode ---------- */
+function presetRange(p){
+  const t=TODAY, dow=(t.getDay()+6)%7, y=t.getFullYear(), m=t.getMonth();
+  const r={today:[t,t], yesterday:[addDays(t,-1),addDays(t,-1)], "7d":[addDays(t,-6),t],
+    thisweek:[addDays(t,-dow),t], lastweek:[addDays(t,-dow-7),addDays(t,-dow-1)], "30d":[addDays(t,-29),t],
+    thismonth:[new Date(y,m,1),t], lastmonth:[new Date(y,m-1,1),lastOfMonth(y,m-1)], "90d":[addDays(t,-89),t]}[p];
+  return r?r.map(key):null;
+}
+const isMonthStart = (s,e)=>{const a=parse(s),b=parse(e);return a.getDate()===1&&a.getMonth()===b.getMonth()&&a.getFullYear()===b.getFullYear()};
+function shiftRange(s,e,dir){
+  if(isMonthStart(s,e)){
+    const a=parse(s), ns=new Date(a.getFullYear(),a.getMonth()+dir,1), ne=lastOfMonth(ns.getFullYear(),ns.getMonth());
+    return [key(ns), key(ne>TODAY?TODAY:ne)];
+  }
+  const L=lenDays(s,e);
+  return [key(addDays(parse(s),dir*L)), key(addDays(parse(e),dir*L))];
+}
+function compareRange(s,e){
+  if(isMonthStart(s,e)){
+    const a=parse(s), ps=new Date(a.getFullYear(),a.getMonth()-1,1), lm=lastOfMonth(ps.getFullYear(),ps.getMonth());
+    const pe=addDays(ps,lenDays(s,e)-1);
+    return [key(ps), key(pe>lm?lm:pe)];
+  }
+  return shiftRange(s,e,-1);
+}
+
+/* ---------- agregasi ---------- */
+const selAccounts = ()=>state.acc==="all"?DB.accounts:DB.accounts.filter(a=>a.id===state.acc);
+function agg(s,e,accs=selAccounts()){
+  const days=lenDays(s,e), inR=d=>d>=s&&d<=e;
+  const camps={}, prods={}, daily={}, hours=Array.from({length:24},(_,h)=>({hour:h,spend:0,clicks:0,leads:0,purchases:0}));
+  for(let d=parse(s);key(d)<=e;d=addDays(d,1)) daily[key(d)]={date:key(d),spend:0,revenue:0};
+  const T={spend:0,impr:0,clicks:0,leads:0,results:0,revenue:0,orders:0,fee:0,cogs:0,fixed:0,adTax:0,metaRev:0,jasaOrders:0,other:0}, perAcc=[];
+  accs.forEach(a=>{
+    const st=a.settings, A={acc:a,spend:0,revenue:0,orders:0,cogs:0,leads:0,metaRev:0};
+    a.campaignDaily.forEach(r=>{ if(!inR(r.date))return;
+      const k=a.id+"|"+r.campaign, meta=a.campaigns.find(x=>x.name===r.campaign)||{};
+      const c=camps[k]||(camps[k]={name:r.campaign,acc:a,meta,status:meta.status||"ACTIVE",spend:0,impressions:0,clicks:0,leads:0,purchases:0,revenue:0});
+      c.spend+=r.spend;c.impressions+=r.impressions;c.clicks+=r.clicks;c.leads+=r.leads||0;c.purchases+=r.purchases;c.revenue+=r.revenue;
+      daily[r.date].spend+=r.spend; A.spend+=r.spend; A.leads+=r.leads||0; if(a.type==="digital") A.metaRev+=r.revenue;
+      T.impr+=r.impressions;T.clicks+=r.clicks;T.results+=r.purchases;
+    });
+    a.sales.forEach(r=>{ if(!inR(r.date))return;
+      const p=a.products.find(x=>x.name===r.product)||{}, k=a.id+"|"+r.product, cg=r.cogs!=null?r.cogs:(p.cogs||0)*r.qty;
+      const P=prods[k]||(prods[k]={name:r.product,acc:a,url:p.url,price:p.price,qty:0,revenue:0,cogs:0});
+      P.qty+=r.qty;P.revenue+=r.revenue;P.cogs+=cg;
+      A.revenue+=r.revenue;A.orders+=r.qty;A.cogs+=cg; daily[r.date].revenue+=r.revenue;
+    });
+    a.hourly.forEach(r=>{ if(!inR(r.date))return; const H=hours[r.hour];H.spend+=r.spend;H.clicks+=r.clicks;H.leads+=r.leads||0;H.purchases+=r.purchases});
+    A.fee=A.revenue*st.feePct/100; A.adTax=A.spend*st.adTaxPct/100;
+    A.fixedItems=a.fixedCosts.map(f=>({name:f.name,amount:f.monthly*days/30})); A.fixed=A.fixedItems.reduce((t,f)=>t+f.amount,0);
+    ["spend","revenue","orders","fee","cogs","fixed","adTax","leads","metaRev"].forEach(f=>T[f]+=A[f]);
+    if(a.type==="jasa") T.jasaOrders+=A.orders;
+    perAcc.push(A);
+  });
+  const types=new Set(accs.map(a=>a.type));
+  T.otherItems=(DB.manualCosts||[]).filter(c=>inR(c.date)&&types.has(c.line));
+  T.other=T.otherItems.reduce((t,c)=>t+c.amount,0);
+  T.gross=T.revenue-T.fee-T.cogs; T.net=T.gross-T.spend-T.adTax-T.fixed-T.other;
+  const taxRate=div(T.adTax,T.spend);
+  Object.values(prods).forEach(p=>{if(p.price==null)p.price=div(p.revenue,p.qty)});
+  Object.assign(T,{days, roas:div(T.revenue,T.spend),
+    cpa:div(T.spend+T.adTax,T.orders), cpl:div(T.spend,T.leads), closeRate:div(T.jasaOrders,T.leads),
+    ctr:div(T.clicks,T.impr), cpc:div(T.spend,T.clicks), aov:div(T.revenue,T.orders), margin:div(T.gross,T.revenue),
+    netMargin:div(T.net,T.revenue), beRoas:div(1+(taxRate||.11),div(T.gross,T.revenue)), profitPerOrder:div(T.net,T.orders),
+    maxCpaBE:div(div(T.gross,T.orders),1+taxRate)});
+  return {T, perAcc, camps:Object.values(camps), prods:Object.values(prods), daily:Object.values(daily), hours,
+    hasLeads:T.leads>0, hasDigital:accs.some(a=>a.type==="digital"),
+    log:accs.flatMap(a=>a.botLog.filter(l=>inR(l.at.slice(0,10))).map(l=>({...l,acc:a}))).sort((x,y)=>y.at.localeCompare(x.at))};
+}
+const lineAgg = (type,s=state.start,e=state.end)=>{const accs=DB.accounts.filter(a=>a.type===type);return accs.length?agg(s,e,accs).T:null};
+
+function recFor(c){
+  const st=c.acc.settings, roas=div(c.revenue,c.spend), cpa=c.purchases?c.spend/c.purchases:Infinity, cpl=c.leads?c.spend/c.leads:Infinity;
+  if(c.status!=="ACTIVE") return ["Nonaktif","b-gray"];
+  const jasa=c.acc.type==="jasa";
+  if(c.spend>=st.killAfterSpend && (jasa? cpl>st.maxCpl : cpa>st.maxCpa)) return ["Matikan","b-red"];
+  if(roas>=st.targetRoas*1.3) return ["Scale +"+st.scaleStepPct+"%","b-green"];
+  if(jasa) return cpl<=st.maxCpl ? ["Pertahankan","b-blue"] : ["Ganti kreatif","b-amber"];
+  if(roas<st.targetRoas) return ["Ganti kreatif","b-amber"];
+  return ["Pertahankan","b-blue"];
+}
+
+/* ---------- render ---------- */
+function deltaHTML(cur,prev,goodUp){
+  if(!prev) return `<div class="dl neu">— belum ada pembanding</div>`;
+  const ch=(cur-prev)/Math.abs(prev), up=ch>=0;
+  const cls=goodUp==null?"neu":(up===goodUp?"pos":"neg");
+  return `<div class="dl ${cls}">${up?"▲":"▼"} ${dec(Math.abs(ch)*100,1)}% vs periode lalu</div>`;
+}
+
+function render(){
+  const accs=selAccounts(), single=accs.length===1?accs[0]:null;
+  const [ps,pe]=compareRange(state.start,state.end);
+  R0=agg(state.start,state.end); const P=agg(ps,pe).T, k=R0.T;
+
+  $("#accName").textContent = single ? single.name+" | "+single.id : "Semua akun iklan";
+  $("#subline").textContent = (single ? LINES[single.type].label+" · omzet "+LINES[single.type].src.toLowerCase() : accs.length+" akun digabung")+" · "+fmtR(state.start,state.end);
+  $("#cmpLbl").textContent = "Dibanding "+fmtR(ps,pe);
+  const on=accs.filter(a=>a.bot?.active).length, st=$("#botStatus");
+  st.classList.toggle("off",on===0);
+  st.lastChild.textContent = on===0?"Bot mati":single?"Bot aktif":on+"/"+accs.length+" bot aktif";
+
+  const kp=[
+    ["Laba bersih",rpk(k.net),"margin bersih "+pct(k.netMargin),"net",true,true],
+    ["Omzet riil",rpk(k.revenue),nf(k.orders)+(R0.hasLeads&&!R0.hasDigital?" closing":" order"),"revenue",true],
+    ["Spend iklan",rpk(k.spend),"+ PPN "+rpk(k.adTax),"spend",null],
+    ["ROAS riil",dec(k.roas)+"x","impas di "+dec(k.beRoas)+"x","roas",true,false,k.roas>=k.beRoas?"pos":"neg"],
+    R0.hasLeads?["Leads",nf(k.leads),"closing rate "+pct(k.closeRate),"leads",true]:["AOV",rpk(k.aov),"rata-rata per order","aov",true],
+    R0.hasLeads?["CPL",rpk(k.cpl),single?"batas "+rpk(single.settings.maxCpl):"biaya per lead","cpl",false]:["CTR",pct(k.ctr),nf(k.clicks)+" klik","ctr",true],
+    ["CPA",rpk(k.cpa),"maks. impas "+rpk(k.maxCpaBE),"cpa",false,false,k.cpa<=k.maxCpaBE?"pos":"neg"],
+    R0.hasLeads&&R0.hasDigital?["CTR",pct(k.ctr),nf(k.clicks)+" klik","ctr",true]:["CPC",rpk(k.cpc),nf(k.impr)+" impresi","cpc",false]
+  ];
+  $("#kpis").innerHTML = kp.map(([l,v,sb,f,good,hl,cl])=>`<div class="card kpi${hl?" hl":""}"><div class="lbl">${l}</div><div class="val num ${cl||(f==="net"?(k.net>=0?"pos":"neg"):"")}">${v}</div><div class="sub">${sb}</div>${deltaHTML(k[f],P[f],good)}</div>`).join("");
+
+  const ins=[];
+  if(!k.spend&&!k.revenue) ins.push(["","Belum ada data","Tidak ada spend atau penjualan di periode ini."]);
+  else if(k.net<0) ins.push(["bad","Masih rugi",`Laba bersih ${rpk(k.net)}. ROAS riil perlu naik ke ${dec(k.beRoas)}x untuk impas.`]);
+  else ins.push(["good","Profit",`Untung ${rpk(k.net)} atau ${rpk(k.profitPerOrder)} per order.`]);
+  if(P.spend){
+    const dS=div(k.spend-P.spend,P.spend), dN=k.net-P.net;
+    ins.push([dN>=0?"good":"warn","Dibanding periode lalu",`Spend ${dS>=0?"naik":"turun"} ${pct(Math.abs(dS))}, laba ${dN>=0?"naik":"turun"} ${rpk(Math.abs(dN))}.`]);
+  }
+  R0.perAcc.filter(A=>A.acc.type==="digital"&&A.spend).forEach(A=>{
+    const gap=div(A.metaRev,A.spend)-div(A.revenue,A.spend);
+    if(gap>.3) ins.push(["warn","Meta lapor lebih tinggi",`${esc(A.acc.name)}: ROAS Meta ${dec(div(A.metaRev,A.spend))}x vs riil ${dec(div(A.revenue,A.spend))}x. Cek pixel / atribusi.`]);
+  });
+  R0.perAcc.filter(A=>A.acc.type==="jasa"&&A.leads).forEach(A=>{
+    const cpl=div(A.spend,A.leads);
+    if(cpl>A.acc.settings.maxCpl) ins.push(["warn","CPL jasa kemahalan",`${esc(A.acc.name)}: CPL ${rpk(cpl)}, batas ${rpk(A.acc.settings.maxCpl)}.`]);
+  });
+  const best=R0.camps.filter(c=>c.status==="ACTIVE"&&c.spend).sort((a,b)=>div(b.revenue,b.spend)-div(a.revenue,a.spend))[0];
+  if(best) ins.push(["","Kampanye terbaik",`${esc(best.name)} ROAS ${dec(div(best.revenue,best.spend))}x.`]);
+  $("#insights").innerHTML = ins.slice(0,5).map(([c,t,x])=>`<div class="insight ${c}"><b>${t}</b>${x}</div>`).join("");
+
+  renderCampaigns();
+
+  const metric=R0.hasLeads&&!R0.hasDigital?"leads":"purchases", mLbl=metric==="leads"?"Leads":"Beli";
+  const H=R0.hours.map(h=>({...h,res:h[metric],cost:h[metric]?h.spend/h[metric]:Infinity}));
+  const hhead=`<thead><tr><th>Jam</th><th class="r">Spend</th><th class="r">${mLbl}</th><th class="r">Biaya/hasil</th></tr></thead>`;
+  const hrow=h=>`<tr><td class="num">${pad(h.hour)}:00</td><td class="r num">${rpk(h.spend)}</td><td class="r num">${nf(h.res)}</td><td class="r num">${rpk(h.cost)}</td></tr>`;
+  const noData=`<tbody><tr><td colspan="4" class="empty">Belum ada data</td></tr></tbody>`;
+  const best5=H.filter(h=>h.res).sort((a,b)=>a.cost-b.cost).slice(0,5);
+  const worst5=H.filter(h=>h.spend).sort((a,b)=>(b.res?b.cost:b.spend*1e4)-(a.res?a.cost:a.spend*1e4)).slice(0,5);
+  $("#tHourBest").innerHTML=hhead+(best5.length?"<tbody>"+best5.map(hrow).join("")+"</tbody>":noData);
+  $("#tHourWorst").innerHTML=hhead+(worst5.length?"<tbody>"+worst5.map(hrow).join("")+"</tbody>":noData);
+
+  const PR=[...R0.prods].sort((a,b)=>b.revenue-a.revenue), maxRev=Math.max(1,...PR.map(p=>p.revenue));
+  $("#tProd").innerHTML=`<thead><tr><th>Produk / jasa</th><th class="r">Harga</th><th class="r">Terjual</th><th class="r">Omzet</th><th class="r">HPP</th><th>Porsi</th></tr></thead><tbody>`+
+    (PR.length?PR.map(p=>`<tr><td class="prod-name">${p.url?`<a href="${esc(p.url)}" target="_blank" rel="noopener">${esc(p.name)}</a>`:`<b>${esc(p.name)}</b>`}<span class="sm">${LINES[p.acc.type].label} · ${LINES[p.acc.type].src}${accs.length>1?" · "+esc(p.acc.name):""}</span></td>
+      <td class="r num">${rpk(p.price)}</td><td class="r num">${nf(p.qty)}</td><td class="r num">${rpk(p.revenue)}</td><td class="r num">${p.cogs?rpk(p.cogs):"—"}</td>
+      <td><div class="num" style="font-size:12px">${pct(div(p.revenue,k.revenue))}</div><div class="bar"><span style="width:${p.revenue/maxRev*100}%"></span></div></td></tr>`).join("")
+    :`<tr><td colspan="6" class="empty">Belum ada penjualan di periode ini</td></tr>`)+
+    `</tbody><tfoot><tr><td>Total</td><td></td><td class="r num">${nf(k.orders)}</td><td class="r num">${rpk(k.revenue)}</td><td class="r num">${k.cogs?rpk(k.cogs):"—"}</td><td></td></tr></tfoot>`;
+
+  renderPL();
+  renderHistory();
+
+  $("#rules").innerHTML = accs.map(a=>{const s=a.settings;const rl=[["Target ROAS",dec(s.targetRoas)+"x"],a.type==="jasa"?["Batas CPL",rpk(s.maxCpl)]:["Batas CPA",rpk(s.maxCpa)],["Matikan iklan setelah spend",rpk(s.killAfterSpend)],["Kenaikan budget saat scale","+"+s.scaleStepPct+"%"],["PPN iklan",s.adTaxPct+"%"]];
+    return `<div class="acc-h"><span>${esc(a.name)}</span><span class="badge ${a.type==="jasa"?"b-violet":"b-blue"}">${LINES[a.type].label}</span></div><div class="rules">`+rl.map(([x,y])=>`<div class="rule"><span>${x}</span><span class="num">${y}</span></div>`).join("")+"</div>"}).join("");
+  const badgeAct=a=>/pause|matikan/i.test(a)?"b-red":/scale|aktif/i.test(a)?"b-green":/notif/i.test(a)?"b-amber":/aturan/i.test(a)?"b-violet":"b-blue";
+  $("#log").innerHTML = R0.log.length ? R0.log.slice(0,100).map(l=>`<li><time class="num">${fmtD(l.at.slice(0,10),false)}<br>${l.at.slice(11,16)}</time><div><span class="badge ${badgeAct(l.action)}">${esc(l.action)}</span> <b>${esc(l.target)}</b><p>${esc(l.reason)}${accs.length>1?" · "+esc(l.acc.name):""}</p></div></li>`).join("") : `<li class="empty" style="display:block">Tidak ada aksi bot di periode ini</li>`;
+
+  drawCharts();
+}
+
+/* ---------- laba rugi per lini ---------- */
+function renderPL(){
+  const D=lineAgg("digital"), J=lineAgg("jasa"), T=agg(state.start,state.end,DB.accounts).T;
+  const cols=[["digital",D],["jasa",J]].filter(([,x])=>x);
+  const [ps,pe]=compareRange(state.start,state.end), PT=agg(ps,pe,DB.accounts).T;
+  $("#plPeriod").textContent="Periode "+fmtR(state.start,state.end)+" ("+T.days+" hari) · selalu menampilkan semua lini, tidak ikut filter akun";
+
+  const card=(lbl,sub,x,prev,hl)=>`<div class="card kpi${hl?" hl":""}"><div class="lbl">${lbl}</div><div class="val num ${x.net>=0?"pos":"neg"}">${rpk(x.net)}</div><div class="sub">${sub} · omzet ${rpk(x.revenue)} · margin ${pct(x.netMargin)}</div>${deltaHTML(x.net,prev,true)}</div>`;
+  $("#plCards").innerHTML = cols.map(([t,x])=>card("Laba "+LINES[t].label,LINES[t].src,x,lineAgg(t,ps,pe)?.net)).join("")+card("Laba gabungan","Semua lini",T,PT.net,true);
+
+  const rows=[
+    ["Penjualan","revenue"],["Fee platform","fee",1],["HPP / biaya pengerjaan","cogs",1],["Laba kotor","gross",0,"grp"],
+    ["Spend iklan","spend",1],["PPN iklan","adTax",1],["Biaya operasional (prorata)","fixed",1],["Biaya lain (input manual)","other",1],
+    ["Laba bersih","net",0,"total"],["Margin bersih","netMargin",0,"",pct],["ROAS riil","roas",0,"",v=>dec(v)+"x"],["Order / closing","orders",0,"",nf]];
+  const cell=(x,f,neg,fmt)=>{const v=x[f]; if(fmt) return fmt(v); if(neg) return v?"("+rp(v)+")":"—"; return rp(v)};
+  $("#tPL").innerHTML=`<thead><tr><th>Pos</th>${cols.map(([t])=>`<th class="r">${LINES[t].label}<span class="sm">${LINES[t].src}</span></th>`).join("")}<th class="r tot">Gabungan<span class="sm">Total</span></th></tr></thead><tbody>`+
+    rows.map(([l,f,neg,cls,fmt])=>`<tr class="${cls||""}"><td>${l}</td>${[...cols.map(c=>c[1]),T].map((x,i)=>`<td class="r num ${i===cols.length?"tot":""} ${cls==="total"||f==="net"?(x[f]>=0?"pos":"neg"):neg&&x[f]?"neg":""}">${cell(x,f,neg,fmt)}</td>`).join("")}</tr>`).join("")+"</tbody>";
+
+  const ue=[["ROAS impas (break-even)",dec(T.beRoas)+"x"],["ROAS riil sekarang",dec(T.roas)+"x"],["Margin kotor",pct(T.margin)],
+    ["CPA maksimal impas",rpk(T.maxCpaBE)],["CPA sekarang (incl. PPN)",rpk(T.cpa)],["Laba per order",rpk(T.profitPerOrder)]];
+  if(T.leads) ue.push(["Closing rate leads jasa",pct(T.closeRate)],["CPL sekarang",rpk(T.cpl)]);
+  $("#unitEco").innerHTML=`<div class="rules">`+ue.map(([a,b])=>`<div class="rule"><span>${a}</span><span class="num">${b}</span></div>`).join("")+"</div>"+
+    (T.otherItems.length?`<div class="note"><b>Biaya lain periode ini:</b><br>${T.otherItems.map(c=>`${fmtD(c.date,false)} · ${esc(c.name)} (${LINES[c.line].label}) ${rpk(c.amount)}`).join("<br>")}</div>`:"");
+}
+
+function renderHistory(){
+  const jasaAccs=DB.accounts.filter(a=>a.type==="jasa");
+  const items=[
+    ...jasaAccs.flatMap(a=>a.sales.filter(s=>s.manual).map(s=>({kind:"sale",acc:a,...s}))),
+    ...(DB.manualCosts||[]).map(c=>({kind:"cost",...c}))
+  ].sort((x,y)=>(y.date+(y.local?"1":"0")).localeCompare(x.date+(x.local?"1":"0"))).slice(0,25);
+  $("#hist").innerHTML = items.length ? items.map(it=>`<li><div>${it.kind==="sale"
+      ?`<span class="badge b-violet">Jasa</span> <b>${esc(it.product)}</b> · <span class="num pos">${rpk(it.revenue)}</span><div class="meta">${fmtD(it.date)} · ${esc(it.client||"tanpa nama")} · ${esc(it.source||"-")}${it.cogs?" · HPP "+rpk(it.cogs):""}</div>`
+      :`<span class="badge b-amber">Biaya</span> <b>${esc(it.name)}</b> · <span class="num neg">${rpk(it.amount)}</span><div class="meta">${fmtD(it.date)} · ${LINES[it.line].label}</div>`}</div>
+      ${it.id?`<button class="btn ghost" data-del="${it.kind}|${esc(it.id)}" aria-label="Hapus">Hapus</button>`:""}</li>`).join("")
+    : `<li class="empty" style="display:block">Belum ada input manual</li>`;
+}
+
+let sortState={key:"spend",dir:-1};
+function renderCampaigns(){
+  const {key:sk,dir}=sortState, multi=selAccounts().length>1, leads=R0.hasLeads;
+  const rows=R0.camps.map(c=>({...c,status:c.meta.status||c.status,accName:c.acc.name,ctr:div(c.clicks,c.impressions),cpc:div(c.spend,c.clicks),
+    cpl:c.leads?c.spend/c.leads:Infinity,cpa:c.purchases?c.spend/c.purchases:Infinity,roas:div(c.revenue,c.spend)}));
+  rows.sort((a,b)=>(typeof a[sk]==="string"?a[sk].localeCompare(b[sk]):((a[sk]===Infinity?1e15:a[sk])-(b[sk]===Infinity?1e15:b[sk])))*dir);
+  const cols=[["name","Kampanye"],...(multi?[["accName","Akun"]]:[]),["status","Status"],["spend","Spend",1],["clicks","Klik",1],["ctr","CTR",1],
+    ...(leads?[["leads","Leads",1],["cpl","CPL",1]]:[]),["purchases",leads?"Beli/closing":"Beli",1],["cpa","CPA",1],["roas","ROAS",1],["rec","Rekomendasi bot"]];
+  const S=f=>rows.reduce((t,x)=>t+x[f],0), T={spend:S("spend"),clicks:S("clicks"),impr:S("impressions"),leads:S("leads"),purch:S("purchases"),rev:S("revenue")};
+  if(!rows.length){$("#tCamp").innerHTML=`<tbody><tr><td class="empty">Tidak ada kampanye berjalan di periode ini</td></tr></tbody>`;return}
+  $("#tCamp").innerHTML=`<thead><tr>${cols.map(([k,l,r])=>`<th class="${r?"r":""}" ${k!=="rec"?`data-k="${k}"`:""}>${l}${sk===k?(dir>0?" ↑":" ↓"):""}</th>`).join("")}</tr></thead><tbody>`+
+    rows.map(c=>{const [rt,rc]=recFor(c), st=c.acc.settings;return `<tr>
+      <td style="font-weight:600;min-width:210px">${esc(c.name)}<span class="sm">${c.acc.type==="jasa"?"Leads / jasa":"Konversi / digital"}</span></td>
+      ${multi?`<td style="white-space:nowrap">${esc(c.acc.name)}</td>`:""}
+      <td><span class="badge ${c.status==="ACTIVE"?"b-green":"b-gray"}">${c.status==="ACTIVE"?"Aktif":"Jeda"}</span></td>
+      <td class="r num">${rpk(c.spend)}</td><td class="r num">${nf(c.clicks)}</td><td class="r num">${pct(c.ctr)}</td>
+      ${leads?`<td class="r num">${c.acc.type==="jasa"?nf(c.leads):"—"}</td><td class="r num ${c.acc.type==="jasa"&&c.cpl>st.maxCpl?"neg":""}">${c.acc.type==="jasa"?rpk(c.cpl):"—"}</td>`:""}
+      <td class="r num">${nf(c.purchases)}</td>
+      <td class="r num ${c.acc.type!=="jasa"&&c.cpa>st.maxCpa?"neg":""}">${rpk(c.cpa)}</td>
+      <td class="r num ${c.roas>=st.targetRoas?"pos":"neg"}">${dec(c.roas)}x</td>
+      <td><span class="badge ${rc}">${rt}</span></td></tr>`}).join("")+
+    `</tbody><tfoot><tr><td>Total</td>${multi?"<td></td>":""}<td></td><td class="r num">${rpk(T.spend)}</td><td class="r num">${nf(T.clicks)}</td><td class="r num">${pct(div(T.clicks,T.impr))}</td>${leads?`<td class="r num">${nf(T.leads)}</td><td class="r num">${rpk(div(T.spend,T.leads))}</td>`:""}<td class="r num">${nf(T.purch)}</td><td class="r num">${rpk(div(T.spend,T.purch))}</td><td class="r num">${dec(div(T.rev,T.spend))}x</td><td></td></tr></tfoot>`;
+  $("#tCamp").querySelectorAll("th[data-k]").forEach(th=>th.onclick=()=>{const k=th.dataset.k;sortState={key:k,dir:sortState.key===k?-sortState.dir:-1};renderCampaigns()});
+}
+
+function drawCharts(){
+  if(!window.Chart||!R0) return;
+  charts.forEach(c=>c.destroy()); charts=[];
+  const muted=cssv("--muted"), line=cssv("--line"), brand=cssv("--brand"), blue=cssv("--blue"), green=cssv("--green"), violet=cssv("--violet");
+  Chart.defaults.font.family='"Plus Jakarta Sans",system-ui'; Chart.defaults.color=muted;
+  const base={responsive:true,maintainAspectRatio:false,interaction:{mode:"index",intersect:false},
+    plugins:{legend:{position:"bottom",labels:{boxWidth:10,boxHeight:10,usePointStyle:true}}},
+    scales:{x:{grid:{display:false}},y:{grid:{color:line},beginAtZero:true,ticks:{callback:v=>rpk(v)}}}};
+  const metric=R0.hasLeads&&!R0.hasDigital?"leads":"purchases", mLbl=metric==="leads"?"Leads":"Pembelian";
+  const hourDS=()=>[
+    {type:"bar",label:"Spend",data:R0.hours.map(h=>h.spend),backgroundColor:brand,borderRadius:3,order:2},
+    {type:"line",label:mLbl,data:R0.hours.map(h=>h[metric]),borderColor:blue,backgroundColor:blue,yAxisID:"y2",tension:.35,pointRadius:2,order:1},
+    ...(R0.hasLeads&&R0.hasDigital?[{type:"line",label:"Leads",data:R0.hours.map(h=>h.leads),borderColor:violet,backgroundColor:violet,yAxisID:"y2",tension:.35,pointRadius:2,order:1}]:[])];
+  const hourOpts={...base,scales:{...base.scales,y2:{position:"right",grid:{display:false},beginAtZero:true,ticks:{precision:0}}}};
+  const hourLabels=R0.hours.map(h=>pad(h.hour));
+  if(R0.T.days===1){
+    $("#trendTitle").textContent="Tren per jam"; $("#trendHint").textContent="Periode 1 hari: spend vs "+mLbl.toLowerCase()+" per jam";
+    charts.push(new Chart($("#cDaily"),{data:{labels:hourLabels,datasets:hourDS()},options:hourOpts}));
+  }else{
+    $("#trendTitle").textContent="Tren harian"; $("#trendHint").textContent="Spend iklan vs omzet riil, garis = ROAS riil";
+    charts.push(new Chart($("#cDaily"),{data:{labels:R0.daily.map(d=>fmtD(d.date,false)),
+      datasets:[
+        {type:"bar",label:"Spend",data:R0.daily.map(d=>d.spend),backgroundColor:brand,borderRadius:3,order:2},
+        {type:"bar",label:"Omzet riil",data:R0.daily.map(d=>d.revenue),backgroundColor:blue,borderRadius:3,order:3},
+        {type:"line",label:"ROAS riil",data:R0.daily.map(d=>div(d.revenue,d.spend)),borderColor:green,backgroundColor:green,yAxisID:"y2",tension:.35,pointRadius:R0.T.days>45?0:2,order:1}
+      ]},options:{...base,plugins:{...base.plugins,tooltip:{callbacks:{label:c=>c.dataset.label+": "+(c.dataset.yAxisID==="y2"?dec(c.raw)+"x":rp(c.raw))}}},
+        scales:{...base.scales,x:{grid:{display:false},ticks:{maxTicksLimit:12}},y2:{position:"right",grid:{display:false},beginAtZero:true,ticks:{callback:v=>dec(v,1)+"x"}}}}}));
+  }
+  charts.push(new Chart($("#cHour"),{data:{labels:hourLabels,datasets:hourDS()},options:hourOpts}));
+}
+
+/* ---------- export ---------- */
+function exportCSV(){
+  const rows=[["Akun","Kampanye","Status","Spend","Impresi","Klik","Leads","Beli/closing","Revenue","ROAS"]]
+    .concat(R0.camps.map(c=>[c.acc.name,c.name,c.meta.status||c.status,c.spend,c.impressions,c.clicks,c.leads,c.purchases,c.revenue,div(c.revenue,c.spend).toFixed(2)]));
+  const csv=rows.map(r=>r.map(x=>`"${String(x).replace(/"/g,'""')}"`).join(",")).join("\n");
+  const a=document.createElement("a");a.href=URL.createObjectURL(new Blob(["﻿"+csv],{type:"text/csv"}));
+  a.download=`laporan-iklan-${state.acc}-${state.start}_${state.end}.csv`;a.click();
+}
+
+/* ---------- kontrol ---------- */
+function save(){try{localStorage.setItem("adsDashState",JSON.stringify({acc:state.acc,preset:state.preset}))}catch(_){}}
+function setAccount(id){ if(id!=="all"&&!DB.accounts.some(a=>a.id===id)) return; state.acc=id; $("#selAcc").value=id; save(); render(); }
+function setRange(s,e,preset){
+  if(s>e)[s,e]=[e,s];
+  if(e>TODAY_K)e=TODAY_K; if(s>TODAY_K)s=TODAY_K;
+  Object.assign(state,{start:s,end:e,preset});
+  $("#selPreset").value=preset; $("#dStart").value=s; $("#dEnd").value=e;
+  $("#nextBtn").disabled = e>=TODAY_K;
+  save(); render();
+}
+function fillAccountSelects(){
+  $("#selAcc").innerHTML=`<option value="all">Semua akun (gabungan)</option>`+DB.accounts.map(a=>`<option value="${esc(a.id)}">${esc(a.name)} · ${LINES[a.type].label}</option>`).join("");
+  $("#selAcc").value=state.acc;
+  const jasa=DB.accounts.filter(a=>a.type==="jasa"), sel=$("#fSale").elements.acc;
+  sel.innerHTML=jasa.length?jasa.map(a=>`<option value="${esc(a.id)}">${esc(a.name)}</option>`).join(""):`<option value="">Belum ada akun jasa</option>`;
+  const fillList=()=>{const a=DB.accounts.find(x=>x.id===sel.value);$("#jasaList").innerHTML=(a?a.products:[]).map(p=>`<option value="${esc(p.name)}">`).join("")};
+  sel.onchange=fillList; fillList();
+}
+function initControls(){
+  let saved={}; try{saved=JSON.parse(localStorage.getItem("adsDashState")||"{}")}catch(_){}
+  if(saved.acc&&(saved.acc==="all"||DB.accounts.some(a=>a.id===saved.acc))) state.acc=saved.acc;
+  fillAccountSelects();
+  $("#selAcc").onchange=e=>setAccount(e.target.value);
+  const p=saved.preset&&saved.preset!=="custom"&&presetRange(saved.preset)?saved.preset:"7d";
+  $("#selPreset").onchange=e=>{const v=e.target.value; if(v==="custom"){state.preset="custom";return} const [s,en]=presetRange(v); setRange(s,en,v)};
+  $("#dStart").max=$("#dEnd").max=TODAY_K;
+  $("#dStart").onchange=$("#dEnd").onchange=()=>{const s=$("#dStart").value,e=$("#dEnd").value; if(s&&e) setRange(s,e,"custom")};
+  $("#prevBtn").onclick=()=>{const [s,e]=shiftRange(state.start,state.end,-1);setRange(s,e,"custom")};
+  $("#nextBtn").onclick=()=>{const [s,e]=shiftRange(state.start,state.end,1); if(s<=TODAY_K) setRange(s,e,"custom")};
+  $("#fSale").elements.date.value=$("#fCost").elements.date.value=TODAY_K;
+  $("#fSale").elements.date.max=$("#fCost").elements.date.max=TODAY_K;
+  const [s,e]=presetRange(p); setRange(s,e,p);
+}
+
+/* ---------- form input manual ---------- */
+$("#fSale").onsubmit=async e=>{
+  e.preventDefault(); const f=e.target.elements, a=DB.accounts.find(x=>x.id===f.acc.value);
+  if(!a){alert("Belum ada akun jasa. Tambahkan dulu akun dengan type \"jasa\" di data.");return}
+  const revenue=parseRp(f.revenue.value); if(!revenue){f.revenue.focus();return}
+  const prod=a.products.find(p=>p.name===f.product.value.trim());
+  const cogs=f.cogs.value.trim()?parseRp(f.cogs.value):(prod?prod.cogs||0:0);
+  const sale={id:uid(),date:f.date.value,product:f.product.value.trim(),qty:1,revenue,cogs,client:f.client.value.trim(),source:f.source.value,manual:true,local:true};
+  if(API.manual){ try{await postManual({kind:"sale",acc:a.id,...sale})}catch(err){alert("Gagal simpan: "+err.message);return} }
+  else { a.sales.push(sale); saveLocalManual(); render(); }
+  f.product.value=f.client.value=f.revenue.value=f.cogs.value="";
+};
+$("#fCost").onsubmit=async e=>{
+  e.preventDefault(); const f=e.target.elements, amount=parseRp(f.amount.value); if(!amount){f.amount.focus();return}
+  const cost={id:uid(),date:f.date.value,line:f.line.value,name:f.name.value.trim(),amount,local:true};
+  if(API.manual){ try{await postManual({kind:"cost",...cost})}catch(err){alert("Gagal simpan: "+err.message);return} }
+  else { DB.manualCosts.push(cost); saveLocalManual(); render(); }
+  f.name.value=f.amount.value="";
+};
+$("#hist").onclick=async e=>{
+  const b=e.target.closest("[data-del]"); if(!b) return;
+  const [kind,id]=b.dataset.del.split("|");
+  if(!confirm("Hapus input ini?")) return;
+  if(API.manual){ try{await postManual({kind:"delete",target:kind,id})}catch(err){alert("Gagal hapus: "+err.message)} return; }
+  if(kind==="sale") DB.accounts.forEach(a=>a.sales=a.sales.filter(s=>s.id!==id));
+  else DB.manualCosts=DB.manualCosts.filter(c=>c.id!==id);
+  saveLocalManual(); render();
+};
+
+/* =====================================================================
+   CHAT BOT
+   Mode demo: bot lokal sederhana (baca angka, pindah akun/periode,
+   ubah aturan, pause/aktifkan/scale kampanye dengan konfirmasi).
+   Kalau API.chat diisi, semua pesan dikirim ke backend AI lo.
+   ===================================================================== */
+const chatHist=[]; let pending=null, chatOpened=false;
+const chatBody=$("#chatBody");
+function addMsg(who,html){
+  const d=document.createElement("div"); d.className="msg "+who; d.innerHTML=html; chatBody.appendChild(d); chatBody.scrollTop=chatBody.scrollHeight;
+  chatHist.push({role:who==="me"?"user":"assistant",content:d.textContent});
+}
+const ctxLine=()=>`<span class="ctx">${esc(state.acc==="all"?"Semua akun":(DB.accounts.find(a=>a.id===state.acc)||{}).name)} · ${fmtR(state.start,state.end)}</span>`;
+function chatContext(){
+  const k=R0.T;
+  return {account:state.acc, start:state.start, end:state.end,
+    summary:{net:k.net,revenue:k.revenue,spend:k.spend,roas:k.roas,cpa:k.cpa,leads:k.leads,cpl:k.cpl,orders:k.orders},
+    campaigns:R0.camps.map(c=>({account:c.acc.id,name:c.name,status:c.meta.status||c.status,spend:c.spend,purchases:c.purchases,leads:c.leads,revenue:c.revenue,recommendation:recFor(c)[0]}))};
+}
+function applyActions(actions){
+  actions.forEach(a=>{
+    if(a.type==="setAccount") setAccount(a.account);
+    if(a.type==="setRange"){ if(a.preset&&presetRange(a.preset)){const [s,e]=presetRange(a.preset);setRange(s,e,a.preset)} else if(a.start&&a.end) setRange(a.start,a.end,"custom"); }
+  });
+}
+async function onChat(text){
+  text=text.trim(); if(!text) return;
+  addMsg("me",esc(text));
+  if(API.chat){
+    const t=document.createElement("div"); t.className="typing"; t.textContent="Bot lagi mikir…"; chatBody.appendChild(t);
+    try{
+      const r=await fetch(API.chat,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({message:text,history:chatHist.slice(-12),context:chatContext()})});
+      const j=await r.json(); t.remove();
+      addMsg("bot",esc(j.reply||"(tidak ada balasan)").replace(/\n/g,"<br>"));
+      applyActions(j.actions||[]); if(j.refresh) await loadData();
+    }catch(err){ t.remove(); addMsg("bot","Gagal nyambung ke bot. Cek endpoint chat di backend."); }
+    return;
+  }
+  addMsg("bot",localBot(text));
+}
+
+const STOP=new Set(["pause","matikan","stop","jeda","aktifkan","nyalakan","hidupkan","jalankan","scale","naikkan","naikin","budget","kampanye","campaign","iklan","yang","itu","dong","tolong","please","akun"]);
+function findCampaign(t){
+  const toks=t.split(/[^a-z0-9%+]+/).filter(w=>w.length>2&&!STOP.has(w));
+  const search=accs=>{let best=null, bs=0;
+    accs.forEach(a=>a.campaigns.forEach(c=>{const n=c.name.toLowerCase();const s=toks.filter(w=>n.includes(w)).length;if(s>bs){bs=s;best={acc:a,c}}}));
+    return best;};
+  return search(selAccounts()) || search(DB.accounts);
+}
+function campaignList(){return "<ul>"+selAccounts().flatMap(a=>a.campaigns.map(c=>`<li>${esc(c.name)} <span class="neu">(${c.status==="ACTIVE"?"aktif":"jeda"})</span></li>`)).join("")+"</ul>"}
+const DEMO_NOTE=`<br><span class="sm">Mode demo: di backend, aksi ini dikirim ke Meta Ads API.</span>`;
+function execAction(p){
+  const {type,acc,c}=p, st=acc.settings;
+  if(type==="pause"){ c.status="PAUSED"; acc.botLog.push({at:nowStamp(),action:"Pause iklan",target:c.name,reason:"Perintah dari chat"}); render(); return `Beres, <b>${esc(c.name)}</b> sudah di-pause.`+DEMO_NOTE; }
+  if(type==="activate"){ c.status="ACTIVE"; acc.botLog.push({at:nowStamp(),action:"Aktifkan iklan",target:c.name,reason:"Perintah dari chat"}); render(); return `Beres, <b>${esc(c.name)}</b> aktif lagi.`+DEMO_NOTE; }
+  if(type==="scale"){ acc.botLog.push({at:nowStamp(),action:"Scale +"+st.scaleStepPct+"%",target:c.name,reason:"Perintah dari chat"}); render(); return `Budget <b>${esc(c.name)}</b> dinaikkan ${st.scaleStepPct}%.`+DEMO_NOTE; }
+  return "Oke.";
+}
+function localBot(raw){
+  const t=raw.toLowerCase().trim();
+  if(pending){
+    const p=pending; pending=null;
+    if(/^(ya|y|iya|yes|ok|oke|gas|lanjut|boleh|sip)\b/.test(t)) return execAction(p);
+    if(/^(tidak|ga|gak|nggak|batal|no|jangan|enggak)\b/.test(t)) return "Oke, dibatalkan.";
+  }
+  const notes=[];
+  // pindah akun
+  let accTo=null;
+  if(/\b(semua|gabung|gabungan)\b/.test(t)) accTo="all";
+  else if(/\bjasa\b/.test(t)&&!/input/.test(t)){const a=DB.accounts.find(a=>a.type==="jasa"); if(a) accTo=a.id}
+  else if(/\b(digital|lynk)\b/.test(t)){const a=DB.accounts.find(a=>a.type==="digital"); if(a) accTo=a.id}
+  else { const a=DB.accounts.find(a=>t.includes(a.id)||t.includes(a.name.toLowerCase())); if(a) accTo=a.id; }
+  if(accTo&&accTo!==state.acc){ state.acc=accTo; $("#selAcc").value=accTo; notes.push("akun"); }
+  // periode
+  const PM=[[/hari ini|today/,"today"],[/kemarin/,"yesterday"],[/(minggu|pekan) lalu/,"lastweek"],[/(minggu|pekan) ini/,"thisweek"],[/bulan lalu/,"lastmonth"],[/bulan ini/,"thismonth"],[/90 ?hari|3 bulan/,"90d"],[/30 ?hari/,"30d"],[/7 ?hari|seminggu/,"7d"]];
+  const pr=PM.find(([re])=>re.test(t));
+  if(pr){const [s,e]=presetRange(pr[1]); setRange(s,e,pr[1]); notes.push("periode")} else if(notes.length){save();render()}
+
+  // ubah aturan
+  const accs=selAccounts(), setRule=(field,label,val,fmt)=>{accs.forEach(a=>{a.settings[field]=val;a.botLog.push({at:nowStamp(),action:"Ubah aturan",target:label,reason:"Jadi "+fmt(val)+" lewat chat"})});render();return `${label} untuk ${accs.length>1?"semua akun":esc(accs[0].name)} sekarang <b>${fmt(val)}</b>.`};
+  let m;
+  if((m=t.match(/target roas\s*(?:jadi|ke|=)?\s*([\d.,]+)/))) return ctxLine()+setRule("targetRoas","Target ROAS",Number(m[1].replace(",","."))||0,v=>dec(v)+"x");
+  if((m=t.match(/batas cpa\s*(?:jadi|ke|=)?\s*([\d.,]+\s*(?:jt|juta|rb|ribu|k)?)/))) return ctxLine()+setRule("maxCpa","Batas CPA",parseRp(m[1]),rpk);
+  if((m=t.match(/batas cpl\s*(?:jadi|ke|=)?\s*([\d.,]+\s*(?:jt|juta|rb|ribu|k)?)/))) return ctxLine()+setRule("maxCpl","Batas CPL",parseRp(m[1]),rpk);
+
+  // aksi kampanye
+  const act=/\b(pause|matikan|stop|jeda)\b/.test(t)?"pause":/\b(aktifkan|nyalakan|hidupkan|jalankan)\b/.test(t)?"activate":/\b(scale|naikkan|naikin)\b/.test(t)?"scale":null;
+  if(act){
+    const f=findCampaign(t);
+    if(!f) return `Kampanye yang mana? Sebut sebagian namanya, misal "pause test kreatif".${campaignList()}`;
+    pending={type:act,...f};
+    const verb={pause:"pause",activate:"aktifkan lagi",scale:`naikkan budget ${f.acc.settings.scaleStepPct}%`}[act];
+    return `Yakin mau ${verb} <b>${esc(f.c.name)}</b> (${esc(f.acc.name)})? Balas <b>ya</b> untuk lanjut atau <b>batal</b>.`;
+  }
+
+  // pertanyaan
+  const k=R0.T, out=[];
+  if(/laba|untung|rugi|profit|cuan bersih/.test(t)){
+    out.push(`Laba bersih <b class="${k.net>=0?"pos":"neg"}">${rp(k.net)}</b> dari omzet ${rp(k.revenue)}, margin ${pct(k.netMargin)}.`);
+    if(state.acc==="all"){const D=lineAgg("digital"),J=lineAgg("jasa");out.push("<ul>"+(D?`<li>${LINES.digital.label}: ${rp(D.net)}</li>`:"")+(J?`<li>${LINES.jasa.label}: ${rp(J.net)}</li>`:"")+"</ul>")}
+  }
+  if(/roas/.test(t)) out.push(`ROAS riil <b>${dec(k.roas)}x</b>, titik impas di ${dec(k.beRoas)}x.`);
+  if(/spend|biaya iklan|habis berapa|keluar berapa/.test(t)) out.push(`Spend iklan <b>${rp(k.spend)}</b> + PPN ${rp(k.adTax)}.`);
+  if(/omzet|penjualan|revenue|pemasukan/.test(t)) out.push(`Omzet riil <b>${rp(k.revenue)}</b> dari ${nf(k.orders)} order/closing.`);
+  if(/lead|cpl/.test(t)) out.push(k.leads?`Leads <b>${nf(k.leads)}</b>, CPL ${rpk(k.cpl)}, closing rate ${pct(k.closeRate)}.`:"Belum ada leads di akun/periode ini.");
+  const act2=R0.camps.filter(c=>c.spend);
+  if(/terbaik|paling bagus|best|juara/.test(t)){const c=[...act2].sort((a,b)=>div(b.revenue,b.spend)-div(a.revenue,a.spend))[0]; out.push(c?`Kampanye terbaik: <b>${esc(c.name)}</b>, ROAS ${dec(div(c.revenue,c.spend))}x dari spend ${rpk(c.spend)}.`:"Belum ada kampanye jalan.")}
+  if(/terburuk|paling jelek|boros|worst|rugi terus/.test(t)){const c=[...act2].sort((a,b)=>div(a.revenue,a.spend)-div(b.revenue,b.spend))[0]; out.push(c?`Paling boros: <b>${esc(c.name)}</b>, ROAS ${dec(div(c.revenue,c.spend))}x dari spend ${rpk(c.spend)}. Rekomendasi bot: ${recFor({...c,status:c.meta.status||c.status})[0]}.`:"Belum ada kampanye jalan.")}
+  if(/\bjam\b/.test(t)){const metric=R0.hasLeads&&!R0.hasDigital?"leads":"purchases";const hs=R0.hours.filter(h=>h[metric]).sort((a,b)=>a.spend/a[metric]-b.spend/b[metric]).slice(0,3);out.push(hs.length?`Jam paling cuan: ${hs.map(h=>`<b>${pad(h.hour)}:00</b> (${rpk(h.spend/h[metric])}/hasil)`).join(", ")}.`:"Belum ada data per jam.")}
+  if(/terlaris|produk|jasa apa/.test(t)){const ps=[...R0.prods].sort((a,b)=>b.revenue-a.revenue).slice(0,3);out.push(ps.length?"Terlaris:<ul>"+ps.map(p=>`<li>${esc(p.name)}: ${nf(p.qty)} terjual, ${rpk(p.revenue)}</li>`).join("")+"</ul>":"Belum ada penjualan.")}
+  if(/rekomendasi|saran|harus ngapain|apa yang|evaluasi/.test(t)){
+    const rs=R0.camps.map(c=>[c,recFor({...c,status:c.meta.status||c.status})]).filter(([,r])=>r[0]!=="Pertahankan"&&r[0]!=="Nonaktif");
+    out.push(rs.length?"Rekomendasi bot:<ul>"+rs.map(([c,r])=>`<li><b>${r[0]}</b>: ${esc(c.name)}</li>`).join("")+"</ul>Mau gw eksekusi salah satunya? Tulis misal \"pause "+esc(rs[0][0].name.split("|")[0].trim().toLowerCase())+"\".":"Semua kampanye aman, pertahankan dulu.");
+  }
+  if(out.length) return ctxLine()+out.join("<br>");
+  if(notes.length) return ctxLine()+`Oke, dashboard pindah. Laba bersih ${rp(k.net)}, spend ${rpk(k.spend)}, ROAS riil ${dec(k.roas)}x.`;
+  return `Gw bisa bantu:<ul><li>Tanya angka: "laba bulan lalu", "roas minggu ini", "leads jasa kemarin"</li><li>Pindah tampilan: "akun jasa", "semua akun", "bulan lalu"</li><li>Ubah aturan: "target roas 3", "batas cpa 40rb"</li><li>Kontrol iklan: "pause test kreatif", "scale bundle", "rekomendasi"</li></ul>`;
+}
+const CHIPS=["Laba bulan lalu?","Rekomendasi","Kampanye paling boros?","Akun jasa minggu ini","Jam paling cuan?","Produk terlaris"];
+$("#chips").innerHTML=CHIPS.map(c=>`<button type="button">${c}</button>`).join("");
+$("#chips").onclick=e=>{const b=e.target.closest("button"); if(b) onChat(b.textContent)};
+$("#chatForm").onsubmit=e=>{e.preventDefault(); const i=$("#chatIn"); const v=i.value; i.value=""; onChat(v)};
+$("#chatFab").onclick=()=>{
+  $("#chat").hidden=false; $("#chatFab").hidden=true; $("#chatIn").focus();
+  if(!chatOpened){chatOpened=true; addMsg("bot",`Halo! Gw bot iklan lo. Tanya angka, pindah akun atau periode, ubah aturan, sampai pause / scale kampanye, semua bisa dari sini.`)}
+};
+$("#chatClose").onclick=()=>{$("#chat").hidden=true; $("#chatFab").hidden=false};
+$("#chatMode").textContent = API.chat ? "Terhubung ke AI" : "Mode demo · belum terhubung ke AI";
+
+/* ---------- tab & tema ---------- */
+$("#tabs").onclick=e=>{const b=e.target.closest("button");if(!b)return;
+  document.querySelectorAll("#tabs button").forEach(x=>x.classList.toggle("on",x===b));
+  document.querySelectorAll(".panel").forEach(p=>p.classList.toggle("on",p.id==="p-"+b.dataset.t));
+  try{history.replaceState(null,"","#"+b.dataset.t)}catch(_){}
+  drawCharts();};
+$("#themeBtn").onclick=()=>{const r=document.documentElement;
+  const dark=r.dataset.theme? r.dataset.theme==="dark" : matchMedia("(prefers-color-scheme: dark)").matches;
+  r.dataset.theme=dark?"light":"dark"; try{localStorage.setItem("adsTheme",r.dataset.theme)}catch(_){}; drawCharts();};
+try{const t=localStorage.getItem("adsTheme");if(t)document.documentElement.dataset.theme=t}catch(_){}
+
+/* ---------- start ---------- */
+async function loadData(){
+  let d=null;
+  if(API.data){try{d=await (await fetch(API.data,{cache:"no-store"})).json()}catch(e){console.warn("Gagal ambil data",e)}}
+  DB = d&&d.accounts?.length ? d : sampleDB();
+  DB.manualCosts = DB.manualCosts||[];
+  mergeLocalManual();
+  if(state.start){fillAccountSelects();render()}
+}
+(async()=>{
+  await loadData();
+  initControls();
+  const h=location.hash.slice(1), b=document.querySelector(`#tabs button[data-t="${h}"]`); if(b) b.click();
+})();
+</script>
+</body>
+</html>
