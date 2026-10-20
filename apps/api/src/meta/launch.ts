@@ -135,12 +135,19 @@ function objectiveSpec(p: LaunchPlan) {
   }
 }
 
+/** Tambahkan petunjuk untuk error Meta yang penyebabnya ada di pengaturan akun, bukan di rencana iklan. */
+export function explain(note: string): string {
+  if (/2310081|set produk tidak valid|invalid product set/i.test(note))
+    return note + " — Petunjuk: akun ini terhubung ke katalog (mis. CPAS) yang set produknya tidak bisa diakses, sehingga Meta menolak ad set PENJUALAN. Perbaiki akses/hapus katalog itu dari akun iklan di Business Manager, atau pakai tujuan prospek/traffic.";
+  return note;
+}
+
 /** Jalankan peluncuran. Tidak melempar error: hasil per langkah dikembalikan supaya bisa dicatat & ditampilkan. */
 export async function executeLaunch(p: LaunchPlan): Promise<LaunchResult> {
   const ctx = { conv: conversationId(), ...job(`luncurkan kampanye ${p.campaignName}`) };
   const spec = objectiveSpec(p);
   const out: LaunchResult = { campaignId: null, adsetId: null, creativeId: null, adId: null, published: false, steps: [] };
-  const fail = (step: LaunchStep["step"], note: string) => { out.steps.push({ step, ok: false, note: note.slice(0, 600) }); return out; };
+  const fail = (step: LaunchStep["step"], note: string) => { out.steps.push({ step, ok: false, note: explain(note).slice(0, 700) }); return out; };
   const base = { ad_account_id: p.accountId };
 
   // 1) Kampanye (CBO, lowest cost) — budget di level kampanye sesuai rekomendasi Meta.
@@ -171,7 +178,7 @@ export async function executeLaunch(p: LaunchPlan): Promise<LaunchResult> {
     }, ctx);
   } catch (e) { return fail("adset", (e as Error).message); }
   out.adsetId = idOf(adset, "ad_set_id", "adset_id");
-  const adsetErr = errorsOf(adset) ?? (out.adsetId ? null : "Meta tidak mengembalikan ID ad set");
+  const adsetErr = errorsOf(adset) ? explain(errorsOf(adset)!) : out.adsetId ? null : "Meta tidak mengembalikan ID ad set";
   out.steps.push({ step: "adset", id: out.adsetId ?? undefined, ok: !adsetErr, note: adsetErr ?? (goal !== spec.goal ? `optimization_goal disesuaikan Meta ke ${goal}` : undefined) });
   if (adsetErr) return out;
 

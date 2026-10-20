@@ -75,3 +75,11 @@ describe("executeLaunch", () => {
     expect(launchPlanSchema.safeParse({ ...plan, dailyBudget: 1500.5 }).success).toBe(false);
   });
 });
+
+describe("explain", () => {
+  it("menambahkan petunjuk katalog untuk error set produk", async () => {
+    const { explain } = await import("../src/meta/launch");
+    expect(explain('{"error_subcode":"2310081","error_message":"Set produk tidak valid"}')).toMatch(/katalog/);
+    expect(explain("error lain")).toBe("error lain");
+  });
+});
