@@ -24,7 +24,11 @@ async function rawTotals(scope: Scope, r: Range, cfg: Config): Promise<RawTotals
   const lines = scope.lines;
   const salesAcc = scope.salesAccountId;
 
-  const [adRows, salesRows, costRows, otherItems] = await Promise.all([
+  // Biaya tetap per bulan dihitung prorata (÷30) hanya untuk hari yang beririsan dengan masa aktifnya (active_to inklusif).
+  const overlap = (from: string, to: string) =>
+    sql`GREATEST(0, LEAST(COALESCE(active_to, ${to}::date), ${to}::date) - GREATEST(active_from, ${from}::date) + 1)`;
+
+  const [adRows, salesRows, costRows, otherItems, fixedRows] = await Promise.all([
     ids.length
       ? sql`
         SELECT account_id,
@@ -69,6 +73,13 @@ async function rawTotals(scope: Scope, r: Range, cfg: Config): Promise<RawTotals
       SELECT id, date::text AS date, line, name, amount FROM manual_costs
       WHERE deleted_at IS NULL AND line = ANY(${lines}::business_line[]) AND date BETWEEN ${r.from} AND ${r.to}
       ORDER BY date, id LIMIT 50`,
+    sql`
+      SELECT line,
+        COALESCE(sum(monthly * ${overlap(r.from, r.to)}), 0) / 30.0 AS fixed,
+        COALESCE(sum(monthly * ${overlap(r.prevFrom, r.prevTo)}), 0) / 30.0 AS p_fixed
+      FROM fixed_costs
+      WHERE line = ANY(${lines}::business_line[]) AND active_from <= ${hi} AND (active_to IS NULL OR active_to >= ${lo})
+      GROUP BY line`,
   ]);
 
   const accById = new Map(cfg.accounts.map((a) => [a.id, a]));
@@ -84,7 +95,7 @@ async function rawTotals(scope: Scope, r: Range, cfg: Config): Promise<RawTotals
   const costs = (p: "" | "p_") => LINES_ALL.filter((l) => lines.includes(l)).map((line) => ({
     line,
     feePct: cfg.lineSettings.find((s) => s.line === line)?.feePct ?? 0,
-    fixedMonthly: cfg.fixedCosts.filter((f) => f.line === line).reduce((t, f) => t + f.monthly, 0),
+    fixed: fixedRows.find((f) => f.line === line)?.[p + "fixed"] ?? 0,
     other: costRows.find((c) => c.line === line)?.[p + "other"] ?? 0,
   }));
 

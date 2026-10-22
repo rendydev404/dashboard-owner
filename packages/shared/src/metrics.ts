@@ -15,7 +15,8 @@ export interface AdTotals {
 }
 /** feeBase = omzet kotor sebagai dasar fee/PPN platform (kosong → pakai revenue). */
 export interface SalesTotals { line: Line; revenue: number; orders: number; cogs: number; feeBase?: number }
-export interface LineCosts { line: Line; feePct: number; fixedMonthly: number; other: number }
+/** `fixed` = biaya tetap yang jatuh di periode ini (sudah prorata sesuai hari aktif tiap biaya). */
+export interface LineCosts { line: Line; feePct: number; fixed: number; other: number }
 
 export interface Kpis {
   days: number;
@@ -46,7 +47,7 @@ export function computeKpis(input: {
   const orders = sum(sales, (s) => s.orders);
   const cogs = sum(sales, (s) => s.cogs);
   const fee = sum(costs, (c) => (sum(sales.filter((s) => s.line === c.line), (s) => s.feeBase ?? s.revenue) * c.feePct) / 100);
-  const fixed = sum(costs, (c) => (c.fixedMonthly * days) / 30);
+  const fixed = sum(costs, (c) => c.fixed);
   const other = sum(costs, (c) => c.other);
   const leads = sum(ads, (a) => a.leads);
   const leadSpend = sum(ads.filter((a) => a.line === "jasa" || a.leads > 0), (a) => a.spend);

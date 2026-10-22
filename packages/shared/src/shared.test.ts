@@ -74,8 +74,8 @@ describe("metrics", () => {
       { line: "jasa" as const, revenue: 7_500_000, orders: 1, cogs: 2_500_000 },
     ],
     costs: [
-      { line: "digital" as const, feePct: 0, fixedMonthly: 720_000, other: 149_000 },
-      { line: "jasa" as const, feePct: 0, fixedMonthly: 2_900_000, other: 1_500_000 },
+      { line: "digital" as const, feePct: 0, fixed: 720_000, other: 149_000 },
+      { line: "jasa" as const, feePct: 0, fixed: 2_900_000, other: 1_500_000 },
     ],
   };
   it("laba bersih gabungan", () => {
@@ -93,7 +93,7 @@ describe("metrics", () => {
       days: 30, lines: ["digital"],
       ads: [{ accountId: "d", line: "digital", spend: 1_000_000, impr: 0, clicks: 0, leads: 0, purchases: 0, metaRev: 0, adTaxPct: 3 }],
       sales: [{ line: "digital", revenue: 97_000, orders: 1, cogs: 0, feeBase: 100_000 }], // grandTotal 97rb, kotor 100rb
-      costs: [{ line: "digital", feePct: 3, fixedMonthly: 0, other: 0 }],
+      costs: [{ line: "digital", feePct: 3, fixed: 0, other: 0 }],
     });
     expect(k.fee).toBe(3_000);
     expect(k.adTax).toBe(30_000);
