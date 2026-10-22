@@ -74,6 +74,9 @@ app.post("/webhooks/lynk", rateLimit(120, 60_000, clientIp), async (c) => {
   return c.json(res.body, res.status);
 });
 
+// Pengunduh media Meta mematuhi robots.txt: hanya /m/ (lampiran sementara) yang boleh diambil, sisanya tertutup.
+app.get("/robots.txt", (c) => c.text("User-agent: *\nAllow: /m/\nDisallow: /\n", 200, { "Cache-Control": "public, max-age=3600" }));
+
 // Link publik sementara lampiran chat, diunduh Meta saat upload media iklan. Token acak 192-bit, mati setelah file
 // diterima Meta / 2 jam. Tanpa cookie karena yang mengakses server Meta.
 app.on(["GET", "HEAD"], "/m/:token/:name?", rateLimit(120, 60_000, clientIp), (c) => {
@@ -83,7 +86,7 @@ app.on(["GET", "HEAD"], "/m/:token/:name?", rateLimit(120, 60_000, clientIp), (c
   log.info("lampiran diunduh", { id: e.id, ua: (c.req.header("user-agent") ?? "").slice(0, 80) });
   const headers = {
     "Content-Type": e.mime, "Content-Length": String(e.size), "Cache-Control": "private, no-store",
-    "Content-Disposition": `inline; filename="${e.name}"`, "X-Robots-Tag": "noindex, nofollow",
+    "Content-Disposition": `inline; filename="${e.name}"`,
   };
   if (c.req.method === "HEAD") return c.body(null, 200, headers);
   return c.body(Readable.toWeb(f.stream()) as ReadableStream, 200, headers);
