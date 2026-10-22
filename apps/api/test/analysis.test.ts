@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { adRow, decompose, funnel, signals } from "../src/analysis";
+import { adRow, cheapImpressionDays, decompose, funnel, placementRows, signals } from "../src/analysis";
 
 const f = (spend: number, impressions: number, clicks: number, results: number, value = 0) => funnel({ spend, impressions, clicks, results, value });
 
@@ -73,5 +73,31 @@ describe("baris iklan dari Meta", () => {
     const a = adRow({ ...raw, omni_purchase: "0", lead: null, results: { values: [{ value: "7" }] } }, "jasa");
     expect(a.results).toBe(7);
     expect(a.metaRoas).toBeNull();
+  });
+});
+
+describe("impresi murah (placement WhatsApp)", () => {
+  // Angka asli akun -02: 6 & 13 Okt melonjak karena placement WhatsApp.
+  const days = [
+    { date: "2026-10-05", cpm: 51_124, impressions: 1441 }, { date: "2026-10-06", cpm: 654, impressions: 575_912 },
+    { date: "2026-10-07", cpm: 18_225, impressions: 19_161 }, { date: "2026-10-08", cpm: 35_127, impressions: 7804 },
+    { date: "2026-10-09", cpm: 2000, impressions: 1 },
+  ];
+  it("hanya hari dengan CPM < 20% median & impresi berarti", () => {
+    expect(cheapImpressionDays(days)).toEqual(["2026-10-06"]);
+  });
+  it("data terlalu sedikit tidak ditandai", () => {
+    expect(cheapImpressionDays(days.slice(0, 2))).toEqual([]);
+  });
+  it("agregasi per placement dari baris kampanye×placement", () => {
+    const row = (p: string, spend: number, impressions: number, link_click: number | null, omni_purchase = "0") =>
+      ({ publisher_platform: p, amount_spent: { value: String(spend), unit: "IDR" }, impressions: String(impressions), link_click, omni_purchase });
+    const out = placementRows([
+      row("facebook", 132_082, 3885, 107, "5"), row("whatsapp", 40_853, 565_380, 2977), row("facebook", 32_783, 742, 30, "3"),
+      row("null", 0, 0, null),
+    ], "digital");
+    expect(out.map((x) => x.placement)).toEqual(["facebook", "whatsapp"]);
+    expect(out[0]).toMatchObject({ spend: 164_865, impressions: 4627, clicks: 137, results: 8, costPerResult: 20_608, spendShare: 80.1 });
+    expect(out[1]).toMatchObject({ cpm: 72, results: 0, costPerResult: null, cvrFromClick: 0 });
   });
 });

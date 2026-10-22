@@ -62,6 +62,14 @@ export function signals(cur: Funnel, prev: Funnel, base: Funnel, half: { first: 
 }
 
 /** Total funnel untuk satu rentang tanggal, kolom diberi awalan `p` (satu scan untuk semua periode). */
+/** Tanggal yang CPM-nya < 20% median periode (dengan impresi berarti): tanda impresi murah yang mendistorsi rata-rata. */
+export function cheapImpressionDays(days: { date: string; cpm: number; impressions: number }[]) {
+  const cpms = days.filter((d) => d.impressions >= 500).map((d) => d.cpm).sort((a, b) => a - b);
+  if (cpms.length < 3) return [];
+  const median = cpms[Math.floor(cpms.length / 2)];
+  return days.filter((d) => d.impressions >= 500 && d.cpm < median * 0.2).map((d) => d.date);
+}
+
 const aggs = (p: string, from: string, to: string) => sql`
   COALESCE(sum(spend) FILTER (WHERE date BETWEEN ${from} AND ${to}), 0) AS ${sql(p + "spend")},
   COALESCE(sum(impressions) FILTER (WHERE date BETWEEN ${from} AND ${to}), 0) AS ${sql(p + "impressions")},
@@ -102,6 +110,10 @@ export async function diagnose(scope: Scope, r: Range, campaignId: string | null
   const second = funnel({ spend: cur.spend - first.spend, impressions: cur.impressions - first.impressions, clicks: cur.clicks - first.clicks, results: cur.results - first.results, value: cur.value - first.value });
   const half = r.days >= 6 ? { first, second } : null;
   const weekly = div(cur.results * 7, r.days);
+  const days = daily.map((d) => ({ date: d.date as string, ...funnel(d as any) }));
+  const outliers = cheapImpressionDays(days);
+  const sig = signals(cur, prev, base, half);
+  if (outliers.length) sig.unshift(`Hari dengan CPM sangat rendah (${outliers.join(", ")}): biasanya tayangan murah di placement WhatsApp/Audience Network yang menggelembungkan impresi & klik. CPM/CTR/CVR rata-rata jadi terdistorsi; pakai CPC, biaya per hasil, dan get_placement_breakdown.`);
   return {
     campaign: camp[0] ?? null,
     period: { from: r.from, to: r.to, days: r.days }, comparePeriod: { from: r.prevFrom, to: r.prevTo }, baselinePeriod: { from: baseFrom, to: baseTo },
@@ -112,8 +124,8 @@ export async function diagnose(scope: Scope, r: Range, campaignId: string | null
     costDriversVsBaseline: decompose(cur, base),
     withinPeriod: half && { firstHalf: { cpm: first.cpm, ctr: first.ctr, cvr: first.cvr, costPerResult: first.costPerResult }, secondHalf: { cpm: second.cpm, ctr: second.ctr, cvr: second.cvr, costPerResult: second.costPerResult } },
     learning: { resultsPerWeek: r2(weekly, 1), note: weekly < 50 ? "Di bawah ~50 hasil/minggu per ad set: algoritma sulit keluar dari learning; hindari memecah budget." : "Volume cukup untuk keluar dari learning." },
-    signals: signals(cur, prev, base, half),
-    daily: daily.map((d) => ({ date: d.date, ...funnel(d as any) })),
+    signals: sig,
+    daily: days,
   };
 }
 
@@ -146,6 +158,39 @@ export function adRow(e: any, line: "digital" | "jasa") {
     video: p25 ? { holdRate25: r2(div(p25 * 100, impr), 1), p75OfP25: r2(div(p75 * 100, p25), 1), thruplayRate: r2(div(thru * 100, impr), 1) } : null,
     rankings: { quality: rank(e.quality_ranking), engagement: rank(e.engagement_rate_ranking), conversion: rank(e.conversion_rate_ranking) },
   };
+}
+
+/** Jumlahkan baris kampanye×placement dari Meta jadi metrik per placement (facebook, instagram, whatsapp, ...). */
+export function placementRows(rows: any[], line: "digital" | "jasa") {
+  const by = new Map<string, { spend: number; impressions: number; clicks: number; results: number }>();
+  for (const e of rows) {
+    const p = String(e.publisher_platform ?? "null");
+    if (p === "null") continue;
+    const a = adRow(e, line), t = by.get(p) ?? { spend: 0, impressions: 0, clicks: 0, results: 0 };
+    by.set(p, { spend: t.spend + a.spend, impressions: t.impressions + a.impressions, clicks: t.clicks + Math.round(num(e.link_click)), results: t.results + a.results });
+  }
+  const total = [...by.values()].reduce((s, x) => s + x.spend, 0);
+  return [...by.entries()].filter(([, x]) => x.spend > 0 || x.impressions > 0).sort((a, b) => b[1].spend - a[1].spend).map(([placement, x]) => ({
+    placement, spend: x.spend, spendShare: r2(div(x.spend * 100, total), 1), impressions: x.impressions, cpm: Math.round(div(x.spend * 1000, x.impressions)),
+    clicks: x.clicks, ctrLink: r2(div(x.clicks * 100, x.impressions)), cpc: Math.round(div(x.spend, x.clicks)),
+    results: x.results, costPerResult: x.results ? Math.round(x.spend / x.results) : null, cvrFromClick: r2(div(x.results * 100, x.clicks)),
+  }));
+}
+
+/** Performa per placement (Facebook, Instagram, WhatsApp, Threads, Audience Network) untuk satu akun, opsional satu kampanye. */
+export async function placementBreakdown(account: { id: string; line: "digital" | "jasa" }, campaignId: string | null, preset: (typeof AD_PRESETS)[number]) {
+  if (metaMode() !== "mcp") return { error: "Rincian placement butuh jalur MCP Meta." };
+  return cached(`placement|${account.id}|${campaignId}|${preset}`, async () => {
+    const rows = await getEntities({
+      ad_account_id: account.id, level: "campaign", date_preset: preset, breakdowns: ["publisher_platform"], limit: 500,
+      fields: ["id", "name", "amount_spent", "impressions", "link_click", "omni_purchase", "lead", "results"],
+      ...(campaignId ? { filtering: [{ field: "campaign_id", operator: "IN", value: [campaignId] }] } : {}),
+    }, { job: "report_measure_or_look_up", request: "analisis performa per placement" }, 3);
+    return {
+      period: preset, resultMeaning: account.line === "jasa" ? "lead" : "pembelian (pixel Meta)", placements: placementRows(rows, account.line),
+      notes: "WhatsApp (Status/Updates) & Audience Network sering memberi impresi/klik sangat murah tapi berkualitas rendah; nilai dari biaya per hasil & CVR, bukan CPM/CTR.",
+    };
+  });
 }
 
 /** Rincian per iklan (kreatif) untuk satu akun, opsional satu kampanye. Diurutkan dari spend terbesar. */

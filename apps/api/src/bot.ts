@@ -10,7 +10,7 @@ import { loadConfig, resolveRange, resolveScope, type Config } from "./scope";
 import * as Q from "./queries";
 import { createCampaignAction, createLaunchAction, findCampaigns, logRuleChange, type CampaignAction } from "./actions";
 import { launchContext } from "./meta/launch";
-import { AD_PRESETS, adBreakdown, diagnose } from "./analysis";
+import { AD_PRESETS, adBreakdown, diagnose, placementBreakdown } from "./analysis";
 import { errMsg, log } from "./log";
 import { summaryWidgets, campaignsWidget, hourlyWidget, productsWidget, plWidget } from "./chat-widgets";
 import { openChatSession, closeChatSession } from "./chat-sessions";
@@ -96,6 +96,20 @@ export const TOOLS: Anthropic.Tool[] = [
         campaign_query: { type: "string" }, campaign_id: { type: "string" },
         period: { type: "string", enum: [...AD_PRESETS], description: "Default last_14d" },
         limit: { type: "number", description: "Maks. iklan (default 12, maks. 30)" },
+      },
+    },
+  },
+  {
+    name: "get_placement_breakdown",
+    description:
+      "Performa per placement (Facebook, Instagram, WhatsApp, Threads, Audience Network) langsung dari Meta: spend & porsi, impresi, CPM, CTR, CPC, hasil, biaya per hasil, CVR. " +
+      "Pakai saat CPM/CTR/impresi terlihat janggal, atau untuk menilai placement mana yang menghasilkan vs hanya menyerap impresi murah.",
+    input_schema: {
+      type: "object",
+      properties: {
+        account_id: { type: "string", description: "ID akun; boleh kosong kalau kampanye atau akun yang dibuka sudah jelas" },
+        campaign_query: { type: "string" }, campaign_id: { type: "string" },
+        period: { type: "string", enum: [...AD_PRESETS], description: "Default last_14d" },
       },
     },
   },
@@ -212,6 +226,20 @@ async function resolveCampaign(input: any, scopeIds: string[], cfg: Config): Pro
   return { id: cands[0].id, accountId: cands[0].account_id };
 }
 
+/** Akun (dan kampanye opsional) untuk analisis live Meta: dari input, kampanye yang disebut, atau akun yang sedang dibuka. */
+async function adTarget(input: any, ctx: ChatContext, cfg: Config) {
+  const scope = resolveScope(ctx.acc, cfg);
+  let accountId: string | undefined = input.account_id, campaignId: string | null = null;
+  if (input.campaign_id || input.campaign_query) {
+    const c = await resolveCampaign(input, scope.accountIds, cfg);
+    if (!("id" in c)) return c;
+    campaignId = c.id; accountId ??= c.accountId;
+  }
+  accountId ??= scope.accounts.length === 1 ? scope.accounts[0].id : undefined;
+  const acc = cfg.accounts.find((a) => a.id === accountId);
+  return acc ? { acc, campaignId } : { error: "Sebutkan akun iklannya (lihat list_ad_accounts) atau nama kampanyenya." };
+}
+
 function slimKpis(k: any) {
   const keys = ["spend", "adTax", "revenue", "orders", "net", "netMargin", "roas", "metaRoas", "beRoas", "cpa", "maxCpaBE", "leads", "cpl", "closeRate", "ctr", "cpc", "aov", "fixed", "other"];
   return Object.fromEntries(keys.map((x) => [x, typeof k[x] === "number" ? Math.round(k[x] * 1000) / 1000 : k[x]]));
@@ -285,19 +313,15 @@ export async function runTool(name: string, input: any, ctx: ChatContext, user: 
         },
       };
     }
-    case "get_ad_breakdown": {
-      const scope = resolveScope(ctx.acc, cfg);
-      let accountId: string | undefined = input.account_id, campaignId: string | null = null;
-      if (input.campaign_id || input.campaign_query) {
-        const c = await resolveCampaign(input, scope.accountIds, cfg);
-        if (!("id" in c)) return c;
-        campaignId = c.id; accountId ??= c.accountId;
-      }
-      accountId ??= scope.accounts.length === 1 ? scope.accounts[0].id : undefined;
-      const acc = cfg.accounts.find((a) => a.id === accountId);
-      if (!acc) return { error: "Sebutkan akun iklannya (lihat list_ad_accounts) atau nama kampanyenya." };
+    case "get_ad_breakdown":
+    case "get_placement_breakdown": {
+      const t = await adTarget(input, ctx, cfg);
+      if (!("acc" in t)) return t;
       const period = (AD_PRESETS as readonly string[]).includes(input.period) ? input.period : "last_14d";
-      return { account: acc.name, ...(await adBreakdown(acc, campaignId, period, Math.min(Number(input.limit) || 12, 30))) };
+      const res = name === "get_ad_breakdown"
+        ? await adBreakdown(t.acc, t.campaignId, period, Math.min(Number(input.limit) || 12, 30))
+        : await placementBreakdown(t.acc, t.campaignId, period);
+      return { account: t.acc.name, ...res };
     }
     case "set_view": {
       const acc = input.account as string | undefined;
@@ -368,6 +392,7 @@ Cara menganalisis (urut, jangan loncat):
 2. Unit economics: bandingkan ROAS riil dengan ROAS impas dan target; CPA dengan CPA maks impas; jasa: CPL ÷ closing rate = biaya per closing (CAC) vs margin per closing. Ini menentukan "sehat/tidak".
 3. Dekomposisi funnel: biaya per hasil = CPM ÷ (1000 × CTR × CVR). Pakai diagnose_performance untuk tahu driver utama:
    - CPM naik → lelang/musim (Q4, harbolnas 11.11/12.12, Ramadan), audiens sempit/jenuh, atau kualitas kreatif rendah.
+   - CPM/impresi janggal (CPM sangat rendah, impresi melonjak) → hampir selalu placement WhatsApp/Audience Network, bukan error data. Cek get_placement_breakdown dan nilai pakai CPC & biaya per hasil.
    - CTR turun → hook/kreatif lemah atau lelah (frekuensi tinggi, CTR menurun dari hari ke hari).
    - CVR turun → masalah setelah klik: landing page (lambat, landing rate < ~70%), offer/harga, checkout (add to cart banyak tapi pembelian sedikit), atau tracking.
 4. Level kreatif: get_ad_breakdown untuk melihat iklan mana yang menyerap spend vs yang benar-benar menghasilkan, frekuensi, hold rate video, ranking. Pemenang = biaya per hasil rendah DENGAN volume cukup.
