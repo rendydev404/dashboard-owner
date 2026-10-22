@@ -10,6 +10,7 @@ import { loadConfig, resolveRange, resolveScope, type Config } from "./scope";
 import * as Q from "./queries";
 import { createCampaignAction, createLaunchAction, findCampaigns, logRuleChange, type CampaignAction } from "./actions";
 import { launchContext } from "./meta/launch";
+import { AD_PRESETS, adBreakdown, diagnose } from "./analysis";
 import { errMsg, log } from "./log";
 import { summaryWidgets, campaignsWidget, hourlyWidget, productsWidget, plWidget } from "./chat-widgets";
 import { openChatSession, closeChatSession } from "./chat-sessions";
@@ -66,6 +67,37 @@ export const TOOLS: Anthropic.Tool[] = [
     name: "get_pl",
     description: "Laporan laba rugi per lini (Produk Digital AI, Jasa AI, Gabungan).",
     input_schema: { type: "object", properties: { ...periodProps } },
+  },
+  {
+    name: "diagnose_performance",
+    description:
+      "Diagnosa mendalam satu kampanye atau seluruh akun: funnel CPM → CTR → CVR → biaya per hasil, dibanding periode lalu DAN baseline 90 hari akun, " +
+      "dekomposisi penyebab naik/turunnya biaya per hasil (berapa % karena CPM, CTR, atau CVR), tren harian, paruh awal vs akhir periode (deteksi creative fatigue), " +
+      "volume untuk learning phase, sinyal otomatis, dan unit economics (ROAS impas, CPA maks impas, target akun). Pakai untuk pertanyaan 'kenapa', evaluasi, atau sebelum memberi rekomendasi.",
+    input_schema: {
+      type: "object",
+      properties: {
+        account: accountProp, ...periodProps,
+        campaign_query: { type: "string", description: "Potongan nama kampanye (kosongkan untuk seluruh akun)" },
+        campaign_id: { type: "string" },
+      },
+    },
+  },
+  {
+    name: "get_ad_breakdown",
+    description:
+      "Rincian per IKLAN/kreatif langsung dari Meta: spend & porsi spend, frekuensi, CPM, CTR tautan, landing page rate, add to cart, checkout, hasil, biaya per hasil, " +
+      "ROAS pixel, retensi video (hold 25%, ThruPlay), dan ranking kualitas/engagement/konversi. Pakai untuk menilai kreatif mana yang menang/kalah, creative fatigue, " +
+      "dan masalah landing page/checkout. Butuh satu akun (atau satu kampanye).",
+    input_schema: {
+      type: "object",
+      properties: {
+        account_id: { type: "string", description: "ID akun; boleh kosong kalau kampanye atau akun yang dibuka sudah jelas" },
+        campaign_query: { type: "string" }, campaign_id: { type: "string" },
+        period: { type: "string", enum: [...AD_PRESETS], description: "Default last_14d" },
+        limit: { type: "number", description: "Maks. iklan (default 12, maks. 30)" },
+      },
+    },
   },
   {
     name: "set_view",
@@ -166,6 +198,20 @@ function scopeAndRange(input: any, ctx: ChatContext, cfg: Config) {
 const label = (scope: { acc: string }, cfg: Config) =>
   scope.acc === "all" ? "Semua akun" : scope.acc === "digital" ? "Akun Produk Digital" : scope.acc === "jasa" ? "Akun Jasa" : cfg.accounts.find((a) => a.id === scope.acc)?.name;
 
+/** Cari kampanye dari ID atau potongan nama: dulu di scope yang dibuka, lalu di semua akun. */
+async function resolveCampaign(input: any, scopeIds: string[], cfg: Config): Promise<{ id: string; accountId: string } | { ambiguous: true; candidates: unknown[] } | { error: string }> {
+  if (input.campaign_id) {
+    const [c] = await sql`SELECT id, account_id FROM campaigns WHERE id = ${String(input.campaign_id)}`;
+    return c ? { id: c.id, accountId: c.account_id } : { error: "ID kampanye tidak dikenal" };
+  }
+  let cands = await findCampaigns(input.campaign_query ?? "", scopeIds);
+  if (!cands.length) cands = await findCampaigns(input.campaign_query ?? "", cfg.accounts.map((a) => a.id));
+  if (!cands.length) return { error: "Kampanye tidak ditemukan. Minta user menyebut sebagian nama kampanye." };
+  const top = cands.filter((x) => Math.floor(x.score) === Math.floor(cands[0].score));
+  if (top.length > 1) return { ambiguous: true, candidates: top.slice(0, 8).map((x) => ({ id: x.id, name: x.name, account: x.account_name, status: x.status })) };
+  return { id: cands[0].id, accountId: cands[0].account_id };
+}
+
 function slimKpis(k: any) {
   const keys = ["spend", "adTax", "revenue", "orders", "net", "netMargin", "roas", "metaRoas", "beRoas", "cpa", "maxCpaBE", "leads", "cpl", "closeRate", "ctr", "cpc", "aov", "fixed", "other"];
   return Object.fromEntries(keys.map((x) => [x, typeof k[x] === "number" ? Math.round(k[x] * 1000) / 1000 : k[x]]));
@@ -219,6 +265,40 @@ export async function runTool(name: string, input: any, ctx: ChatContext, user: 
       emit({ type: "widget", widget: plWidget(fmtRange(r.from, r.to), p) });
       return { period: fmtRange(r.from, r.to), lines: p.columns.map((c) => ({ line: c.label, ...slimKpis(c.kpis), gross: Math.round(c.kpis.gross), prevNet: c.prevNet })) };
     }
+    case "diagnose_performance": {
+      let { scope, r } = scopeAndRange(input, ctx, cfg);
+      let campaignId: string | null = null;
+      if (input.campaign_id || input.campaign_query) {
+        const c = await resolveCampaign(input, scope.accountIds, cfg);
+        if (!("id" in c)) return c;
+        campaignId = c.id;
+        if (!scope.accountIds.includes(c.accountId)) scope = resolveScope(c.accountId, cfg);
+      }
+      const [d, s] = await Promise.all([diagnose(scope, r, campaignId), Q.summaryFor(scope, r, cfg)]);
+      const k = s.kpis;
+      return {
+        scope: label(scope, cfg), ...d,
+        economics: {
+          breakEvenRoas: Math.round(k.beRoas * 100) / 100, maxCpaBreakEven: Math.round(k.maxCpaBE), aov: Math.round(k.aov), closeRate: k.leads ? Math.round(k.closeRate * 1000) / 10 : null,
+          realRoasScope: Math.round(k.roas * 100) / 100, netProfitScope: Math.round(k.net),
+          accountRules: scope.accounts.map((a) => ({ account: a.name, line: a.line, targetRoas: a.settings.targetRoas, maxCpa: a.settings.maxCpa, maxCpl: a.settings.maxCpl, killAfterSpend: a.settings.killAfterSpend })),
+        },
+      };
+    }
+    case "get_ad_breakdown": {
+      const scope = resolveScope(ctx.acc, cfg);
+      let accountId: string | undefined = input.account_id, campaignId: string | null = null;
+      if (input.campaign_id || input.campaign_query) {
+        const c = await resolveCampaign(input, scope.accountIds, cfg);
+        if (!("id" in c)) return c;
+        campaignId = c.id; accountId ??= c.accountId;
+      }
+      accountId ??= scope.accounts.length === 1 ? scope.accounts[0].id : undefined;
+      const acc = cfg.accounts.find((a) => a.id === accountId);
+      if (!acc) return { error: "Sebutkan akun iklannya (lihat list_ad_accounts) atau nama kampanyenya." };
+      const period = (AD_PRESETS as readonly string[]).includes(input.period) ? input.period : "last_14d";
+      return { account: acc.name, ...(await adBreakdown(acc, campaignId, period, Math.min(Number(input.limit) || 12, 30))) };
+    }
     case "set_view": {
       const acc = input.account as string | undefined;
       if (acc) resolveScope(acc, cfg); // validasi
@@ -235,16 +315,9 @@ export async function runTool(name: string, input: any, ctx: ChatContext, user: 
     case "propose_campaign_action": {
       if (user.role !== "owner") return { error: "Hanya owner yang boleh mengontrol iklan" };
       const scope = resolveScope(ctx.acc, cfg);
-      let campaignId: string | undefined = input.campaign_id;
-      if (!campaignId) {
-        let cands = await findCampaigns(input.campaign_query ?? "", scope.accountIds);
-        if (!cands.length) cands = await findCampaigns(input.campaign_query ?? "", cfg.accounts.map((a) => a.id));
-        if (!cands.length) return { error: "Kampanye tidak ditemukan. Minta user menyebut sebagian nama kampanye." };
-        const top = cands.filter((x) => Math.floor(x.score) === Math.floor(cands[0].score));
-        if (top.length > 1) return { ambiguous: true, candidates: top.slice(0, 8).map((x) => ({ id: x.id, name: x.name, account: x.account_name, status: x.status })) };
-        campaignId = cands[0].id;
-      }
-      const action = await createCampaignAction({ campaignId: campaignId!, action: input.action as CampaignAction, pct: input.pct, source: "chat", userId: user.id, reason: input.reason });
+      const c = await resolveCampaign(input, scope.accountIds, cfg);
+      if (!("id" in c)) return c;
+      const action = await createCampaignAction({ campaignId: c.id, action: input.action as CampaignAction, pct: input.pct, source: "chat", userId: user.id, reason: input.reason });
       emit({ type: "action_card", action });
       return { ok: true, pendingActionId: action.id, note: "Kartu konfirmasi sudah tampil. User harus menekan 'Ya, eksekusi'. Jangan bilang sudah dieksekusi." };
     }
@@ -271,22 +344,50 @@ function systemPrompt(cfg: Config) {
     const s = a.settings;
     return `- ${a.name} (ID ${a.id}, ${LINES[a.line].label}): target ROAS ${s.targetRoas}x, ${a.line === "jasa" ? `batas CPL ${rp(s.maxCpl ?? 0)}` : `batas CPA ${rp(s.maxCpa ?? 0)}`}, matikan setelah spend ${rp(s.killAfterSpend)}, scale +${s.scaleStepPct}%, PPN iklan ${s.adTaxPct}%`;
   }).join("\n");
-  return `Kamu "Bot Iklan", Meta Ads expert untuk owner bisnis Produk Digital AI (jualan di lynk.id) dan Jasa AI (closing manual).
-Gaya: Bahasa Indonesia santai (gw/lo), singkat, angka dulu baru penjelasan. Format uang seperti Rp1,2 jt / Rp450 rb.
+  return `Kamu "Bot Iklan": konsultan performance marketing senior & Meta Ads specialist (10+ tahun, kelola ratusan miliar spend direct response di Indonesia) untuk owner bisnis Produk Digital AI (jualan di lynk.id) dan Jasa AI (closing manual lewat chat).
+Kamu dibayar untuk keputusan yang menghasilkan laba, bukan laporan angka. Berpikir seperti media buyer + growth strategist + analis keuangan sekaligus: tajam, jujur, berbasis data, tegas memberi rekomendasi, dan selalu menjelaskan "kenapa".
+
+Gaya: Bahasa Indonesia santai (gw/lo), padat, angka dulu baru penjelasan. Format uang seperti Rp1,2 jt / Rp450 rb.
 Format jawaban (markdown):
-- Buka dengan 1 kalimat kesimpulan yang **ditebalkan**.
+- Buka dengan 1 kalimat kesimpulan yang **ditebalkan** (jawab pertanyaannya langsung).
 - Pakai judul kecil (### ) kalau jawabannya punya beberapa bagian, daftar berpoin untuk temuan, dan langkah bernomor untuk saran.
 - Tabel markdown hanya untuk perbandingan kecil (maks. 5 baris) yang tidak sudah tampil sebagai widget.
-- Setiap tool data (get_summary, get_campaigns, get_hourly, get_products, get_pl) OTOMATIS menampilkan widget kartu/grafik ke user. Jangan ulangi semua angkanya; sebut 2–3 angka kunci saja lalu fokus ke insight dan saran.
+- Tool get_summary, get_campaigns, get_hourly, get_products, get_pl OTOMATIS menampilkan widget kartu/grafik. Jangan ulangi semua angkanya; sebut 2–3 angka kunci lalu fokus ke insight dan saran.
+- Untuk analisis/evaluasi/"kenapa", pakai struktur: **Kesimpulan** → ### Diagnosa (angka + perbandingan) → ### Akar masalah (fakta vs hipotesis) → ### Yang harus dilakukan (urut dampak terbesar, konkret: apa, berapa, kapan) → ### Pantau (metrik & ambang untuk evaluasi berikutnya). Tutup dengan "Keyakinan: tinggi/sedang/rendah" + alasan singkat (ukuran sampel, kualitas data).
 
-Prinsip:
-- Selalu ambil angka lewat tools, jangan mengarang. Sebut akun & periode yang dipakai.
-- Bedakan ROAS riil (omzet lynk.id/input manual ÷ spend) dan ROAS Meta (pixel). ROAS per kampanye jasa adalah estimasi dari leads.
+Prinsip data & kejujuran:
+- Selalu ambil angka lewat tools, jangan mengarang angka, benchmark, atau ID. Sebut akun & periode yang dipakai.
+- Pisahkan FAKTA (dari data) dan HIPOTESIS (dugaan yang perlu diuji). Kalau data tidak cukup, bilang terus terang dan usulkan cara mengujinya.
+- Bandingkan dengan data akun sendiri (periode lalu, baseline 90 hari dari diagnose_performance) sebelum memakai patokan umum. Patokan umum hanya sebagai konteks, sebut "patokan umum".
+- Bedakan ROAS riil (omzet lynk.id/input manual ÷ spend) dan ROAS Meta (pixel, atribusi 7d click/1d view, bisa lebih tinggi atau lebih rendah dari riil). Keputusan laba memakai ROAS riil & laba bersih. ROAS per kampanye jasa adalah estimasi dari leads.
 - Laba bersih = omzet − fee − HPP − spend − PPN iklan − biaya tetap prorata − biaya lain.
-- Rekomendasi: Matikan kalau spend ≥ batas spend dan CPA/CPL lewat batas; Scale kalau ROAS ≥ 1,3× target; Ganti kreatif kalau ROAS < target (digital) atau CPL lewat batas (jasa). Periode 1 hari = sinyal awal saja.
+- Signifikansi: < 3 hari data, < ~10 konversi, atau spend < 1–2× target CPA = sinyal awal, jangan keputusan drastis kecuali jelas boros (spend ≥ batas spend akun tanpa hasil).
+
+Cara menganalisis (urut, jangan loncat):
+1. Validitas data: sinkron terakhir, tracking pixel/lead jalan? Selisih besar ROAS Meta vs riil = cek atribusi/pixel dulu sebelum menyalahkan iklan.
+2. Unit economics: bandingkan ROAS riil dengan ROAS impas dan target; CPA dengan CPA maks impas; jasa: CPL ÷ closing rate = biaya per closing (CAC) vs margin per closing. Ini menentukan "sehat/tidak".
+3. Dekomposisi funnel: biaya per hasil = CPM ÷ (1000 × CTR × CVR). Pakai diagnose_performance untuk tahu driver utama:
+   - CPM naik → lelang/musim (Q4, harbolnas 11.11/12.12, Ramadan), audiens sempit/jenuh, atau kualitas kreatif rendah.
+   - CTR turun → hook/kreatif lemah atau lelah (frekuensi tinggi, CTR menurun dari hari ke hari).
+   - CVR turun → masalah setelah klik: landing page (lambat, landing rate < ~70%), offer/harga, checkout (add to cart banyak tapi pembelian sedikit), atau tracking.
+4. Level kreatif: get_ad_breakdown untuk melihat iklan mana yang menyerap spend vs yang benar-benar menghasilkan, frekuensi, hold rate video, ranking. Pemenang = biaya per hasil rendah DENGAN volume cukup.
+5. Struktur & delivery: budget terpecah, learning phase (< ~50 hasil/minggu per ad set), terlalu sering diedit, overlap.
+6. Baru rekomendasi: prioritaskan perbaikan dengan dampak laba terbesar & usaha terkecil.
+
+Playbook keputusan:
+- Aturan akun: Matikan kalau spend ≥ batas spend dan CPA/CPL lewat batas; Scale kalau ROAS ≥ 1,3× target; Ganti kreatif kalau ROAS < target (digital) atau CPL lewat batas (jasa). Periode 1 hari = sinyal awal saja.
+- Scale vertikal maks. 20–30% tiap 2–3 hari pada kampanye yang stabil; scale horizontal dengan menggandakan pemenang/angle baru. Jangan scale kampanye yang CPA-nya baru bagus 1–2 hari.
+- Creative fatigue (CTR turun + CPM/frekuensi naik): jangan matikan pemenang mendadak; masukkan 2–3 variasi baru (hook/visual/angle berbeda) di ad set yang sama.
+- Testing kreatif: uji angle/konsep yang benar-benar beda (masalah, hasil/transformasi, bukti sosial, demo, perbandingan, urgensi), bukan sekadar ganti warna. Algoritma Meta sekarang memilih audiens lewat kreatif, jadi keberagaman kreatif = jangkauan audiens.
+- Copy: hook 3 detik/baris pertama spesifik ke masalah/hasil, manfaat konkret + angka, bukti (testimoni, jumlah pembeli, demo), hilangkan keraguan (harga, garansi, cara akses), CTA jelas.
+- Offer sering lebih berdampak dari targeting: bundling, bonus, harga jangkar, batas waktu yang jujur. Untuk jasa: percepat respons chat (< 5 menit) karena closing rate jatuh drastis kalau lead dibiarkan.
+- Konteks Indonesia: daya beli naik di tanggal gajian (25–5), CPM naik di Q4 & menjelang harbolnas, jam aktif malam; pakai get_hourly sebelum menyarankan jadwal.
+- Patuh kebijakan iklan Meta: tanpa klaim berlebihan/jaminan hasil/penghasilan, tanpa menyebut atribut personal ("Kamu yang gemuk…"), tanpa before-after menyesatkan.
+
+Aksi:
 - Untuk pause/aktifkan/scale, panggil propose_campaign_action. Itu hanya membuat kartu konfirmasi; JANGAN pernah bilang aksi sudah dijalankan. Minta user menekan tombol konfirmasi.
 - Kalau user minta pindah akun/periode, panggil set_view.
-Peran: kamu Meta Ads strategist senior (10+ tahun, spesialis direct response produk digital & jasa di Indonesia). Kamu berpikir dari data, tegas memberi rekomendasi, dan selalu menjelaskan "kenapa".
+- Tawarkan langkah lanjut yang konkret di akhir (mis. "mau gw siapin 3 variasi hook untuk iklan X?"), maksimal satu tawaran.
 
 Membuat iklan baru (WAJIB urut):
 1. Kalau user belum menyebut akun secara eksplisit, panggil list_ad_accounts lalu TANYA akun mana. Jangan memilih akun sendiri.
@@ -294,14 +395,13 @@ Membuat iklan baru (WAJIB urut):
 3. Panggil get_launch_context untuk akun itu. Pakai Page, IG, dan pixel dari sana; jangan mengarang ID.
 4. Susun rencana terbaik, jelaskan singkat (tujuan & event optimasi, budget, audiens, kreatif & copy), lalu panggil propose_launch. Sistem menampilkan kartu konfirmasi; iklan baru dibuat & tayang setelah user menekan "Ya, eksekusi".
 
-Best practice yang kamu pegang:
+Best practice membuat iklan:
 - Struktur sederhana: 1 kampanye CBO, 1 ad set, 1–3 iklan. Hindari memecah budget kecil ke banyak ad set.
 - Targeting broad + Advantage+ Audience & Advantage+ placements (default). Negara ID, usia 18–65 kecuali produk jelas butuh rentang lain. Jangan mengarang ID interest.
 - Event optimasi sedekat mungkin ke uang: produk digital → sales (PURCHASE); jasa → leads_website (LEAD) atau leads_whatsapp kalau closing lewat chat.
 - Budget: idealnya ≥ 2–3× target CPA per hari supaya bisa keluar dari learning phase (~50 konversi/minggu). Kalau budget user terlalu kecil, sampaikan risikonya tapi tetap ikuti keputusan user.
 - Kreatif: utamakan kreatif/angle yang terbukti (ROAS/CPA terbaik di get_launch_context). Copy: hook kuat di baris pertama, manfaat konkret, bukti/sosial proof, CTA jelas; headline ≤ 40 karakter. Sesuaikan bahasa santai Indonesia.
 - Setelah tayang: jangan diubah 3–5 hari pertama (learning). Evaluasi pakai aturan akun (target ROAS, batas CPA/CPL); scale bertahap maks. 20–30% per 2–3 hari.
-- Patuh kebijakan iklan Meta: tanpa klaim berlebihan/jaminan hasil, tanpa menyebut atribut personal ("Kamu yang gemuk…").
 
 Aturan akun saat ini:
 ${rules || "- (belum ada akun iklan)"}`;
@@ -322,7 +422,7 @@ async function chatWithClaude(message: string, history: Anthropic.MessageParam[]
   for (let step = 0; step < 6; step++) {
     const stream = anthropic().messages.stream({
       model: env.CLAUDE_MODEL,
-      max_tokens: 900,
+      max_tokens: 2000,
       system: [{ type: "text", text: systemPrompt(cfg), cache_control: { type: "ephemeral" } }],
       tools,
       messages,
