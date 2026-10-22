@@ -11,6 +11,7 @@ import * as Q from "./queries";
 import { createCampaignAction, createLaunchAction, findCampaigns, logRuleChange, type CampaignAction } from "./actions";
 import { launchContext } from "./meta/launch";
 import { AD_PRESETS, adBreakdown, diagnose, placementBreakdown } from "./analysis";
+import { uploadAttachment } from "./meta/upload";
 import { errMsg, log } from "./log";
 import { summaryWidgets, campaignsWidget, hourlyWidget, productsWidget, plWidget } from "./chat-widgets";
 import { openChatSession, closeChatSession } from "./chat-sessions";
@@ -157,6 +158,18 @@ export const TOOLS: Anthropic.Tool[] = [
     input_schema: { type: "object", properties: { account_id: { type: "string" } }, required: ["account_id"] },
   },
   {
+    name: "upload_media_to_meta",
+    description:
+      "Upload foto/video yang dilampirkan user di chat (baris '[Lampiran … media_id=…]') ke perpustakaan media akun iklan Meta. " +
+      "Foto → imageHash; video → videoId (diproses Meta 1–5 menit). Panggil SETELAH akun dipastikan. Memanggil lagi untuk media_id yang sama " +
+      "mengembalikan status terbaru (cek apakah video sudah siap). Upload ini belum membuat iklan dan tanpa biaya. File sementara di server dihapus begitu Meta menerimanya.",
+    input_schema: {
+      type: "object",
+      properties: { media_id: { type: "string", description: "media_id dari baris lampiran" }, account_id: { type: "string", description: "ID akun iklan yang DIPILIH USER" } },
+      required: ["media_id", "account_id"],
+    },
+  },
+  {
     name: "propose_launch",
     description:
       "USULKAN kampanye baru (kampanye CBO → ad set Advantage+ → kreatif → iklan). TIDAK membuat apa pun di Meta: tool ini hanya menampilkan " +
@@ -185,7 +198,8 @@ export const TOOLS: Anthropic.Tool[] = [
           type: "object",
           description:
             "Salah satu: {type:'existing', creativeId} memakai kreatif yang sudah terbukti; {type:'post', objectStoryId:'PAGEID_POSTID'} boost postingan Page; " +
-            "{type:'new', imageUrl|imageHash|videoId, primaryText, headline, description?, cta} kreatif baru.",
+            "{type:'new', imageUrl|imageHash|videoId, primaryText, headline, description?, cta} kreatif baru. " +
+            "Untuk lampiran chat: pakai imageHash/videoId dari upload_media_to_meta (thumbnail video diambil otomatis dari Meta).",
           properties: {
             type: { type: "string", enum: ["existing", "post", "new"] },
             creativeId: { type: "string" }, objectStoryId: { type: "string" },
@@ -351,6 +365,12 @@ export async function runTool(name: string, input: any, ctx: ChatContext, user: 
       if (user.role !== "owner") return { error: "Hanya owner yang boleh membuat iklan" };
       return await launchContext(String(input.account_id ?? ""));
     }
+    case "upload_media_to_meta": {
+      if (user.role !== "owner") return { error: "Hanya owner yang boleh membuat iklan" };
+      const acc = cfg.accounts.find((a) => a.id === String(input.account_id ?? "") && a.active);
+      if (!acc) return { error: "Akun iklan tidak terdaftar atau tidak aktif. Tanyakan akun mana (list_ad_accounts)." };
+      return { account: acc.name, ...(await uploadAttachment(String(input.media_id ?? ""), user.id, acc.id)) };
+    }
     case "propose_launch": {
       if (user.role !== "owner") return { error: "Hanya owner yang boleh membuat iklan" };
       const action = await createLaunchAction(input, user.id, input.rationale);
@@ -419,6 +439,12 @@ Membuat iklan baru (WAJIB urut):
 2. Pastikan jelas: produk/jasa yang diiklankan, tujuan (penjualan / prospek website / chat WhatsApp / traffic), budget HARIAN dalam Rupiah, dan kreatif (pakai kreatif lama yang terbukti, boost postingan, atau gambar/video baru + copy). Kalau ada yang belum jelas, tanya singkat dalam satu pesan. Jangan mengarang budget.
 3. Panggil get_launch_context untuk akun itu. Pakai Page, IG, dan pixel dari sana; jangan mengarang ID.
 4. Susun rencana terbaik, jelaskan singkat (tujuan & event optimasi, budget, audiens, kreatif & copy), lalu panggil propose_launch. Sistem menampilkan kartu konfirmasi; iklan baru dibuat & tayang setelah user menekan "Ya, eksekusi".
+
+Foto/video dari user (pesan berisi baris "[Lampiran foto|video · media_id=…]"):
+- Itu kreatif yang ingin diiklankan user. Kamu tidak bisa melihat isinya; tanyakan singkat isi/pesan utamanya kalau belum jelas dari teks user, lalu tulis copy (primary text, headline ≤ 40 karakter, CTA) yang cocok.
+- Setelah akun pasti, panggil upload_media_to_meta(media_id, account_id). Foto → creative {type:'new', imageHash}. Video → creative {type:'new', videoId} (thumbnail otomatis). Jangan mengarang hash/ID.
+- Video yang masih diproses Meta boleh langsung dibuatkan kartu rencananya; beri tahu user bahwa tombol "Ya, eksekusi" baru berhasil setelah video siap (1–5 menit).
+- Satu lampiran = satu iklan. Lebih dari satu lampiran: tanyakan mau 1 kampanye dengan iklan terpisah (buat satu per satu) atau pilih satu.
 
 Best practice membuat iklan:
 - Struktur sederhana: 1 kampanye CBO, 1 ad set, 1–3 iklan. Hindari memecah budget kecil ke banyak ad set.

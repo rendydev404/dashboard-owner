@@ -3,10 +3,12 @@
 // kampanye (CBO) → ad set → kreatif → iklan, semuanya sebagai DRAFT; berhenti di langkah pertama yang gagal (tanpa biaya);
 // baru di-publish (tayang) kalau semua langkah bersih dan user memilih langsung tayang.
 import { z } from "zod";
+import { HTTPException } from "hono/http-exception";
 import { metaMode } from "../env";
 import { sql } from "../db";
 import { loadConfig, type Config } from "../scope";
 import { callTool, conversationId, unwrap } from "./mcp";
+import { videoStatus } from "./upload";
 
 export const LAUNCH_OBJECTIVES = ["sales", "leads_website", "leads_whatsapp", "traffic"] as const;
 export const LAUNCH_CTAS = ["SHOP_NOW", "BUY_NOW", "LEARN_MORE", "SIGN_UP", "ORDER_NOW", "GET_OFFER", "CONTACT_US", "APPLY_NOW", "SUBSCRIBE", "WHATSAPP_MESSAGE"] as const;
@@ -143,6 +145,21 @@ export function explain(note: string): string {
   return note;
 }
 
+const needsVideoThumb = (p: LaunchPlan) => p.creative.type === "new" && !!p.creative.videoId && !p.creative.imageHash && !p.creative.imageUrl;
+
+/**
+ * Dipanggil sebelum konfirmasi diklaim: video yang masih diproses Meta ditolak dengan 409 supaya user cukup menekan
+ * "Ya, eksekusi" lagi nanti, tanpa aksi hangus dan tanpa kampanye setengah jadi.
+ */
+export async function assertLaunchMediaReady(p: LaunchPlan) {
+  if (!needsVideoThumb(p) || p.creative.type !== "new") return;
+  const v = await videoStatus(p.accountId, p.creative.videoId!);
+  if (v.status === "error") throw new HTTPException(409, { message: "Meta gagal memproses video ini. Upload ulang videonya lewat chat." });
+  if (v.status !== "ready" || !v.picture) {
+    throw new HTTPException(409, { message: `Video masih diproses Meta${v.progress != null ? ` (${v.progress}%)` : ""}. Tunggu 1–2 menit lalu tekan "Ya, eksekusi" lagi.` });
+  }
+}
+
 /** Jalankan peluncuran. Tidak melempar error: hasil per langkah dikembalikan supaya bisa dicatat & ditampilkan. */
 export async function executeLaunch(p: LaunchPlan): Promise<LaunchResult> {
   const ctx = { conv: conversationId(), ...job(`luncurkan kampanye ${p.campaignName}`) };
@@ -150,6 +167,16 @@ export async function executeLaunch(p: LaunchPlan): Promise<LaunchResult> {
   const out: LaunchResult = { campaignId: null, adsetId: null, creativeId: null, adId: null, published: false, steps: [] };
   const fail = (step: LaunchStep["step"], note: string) => { out.steps.push({ step, ok: false, note: explain(note).slice(0, 700) }); return out; };
   const base = { ad_account_id: p.accountId };
+
+  // 0) Iklan video wajib punya thumbnail: pakai thumbnail buatan Meta. Dicek sebelum membuat apa pun.
+  let videoThumb: string | null = null;
+  if (needsVideoThumb(p) && p.creative.type === "new") {
+    try {
+      const v = await videoStatus(p.accountId, p.creative.videoId!);
+      if (v.status !== "ready" || !v.picture) return fail("creative", `Video belum siap dipakai (status ${v.status}). Tidak ada yang dibuat.`);
+      videoThumb = v.picture;
+    } catch (e) { return fail("creative", `Gagal cek video: ${(e as Error).message}`); }
+  }
 
   // 1) Kampanye (CBO, lowest cost) — budget di level kampanye sesuai rekomendasi Meta.
   let camp: any;
@@ -198,6 +225,7 @@ export async function executeLaunch(p: LaunchPlan): Promise<LaunchResult> {
       if (c.videoId) args.video_id = c.videoId;
       if (c.imageHash) args.image_hash = c.imageHash;
       if (c.imageUrl) args.image_url = c.imageUrl;
+      if (videoThumb) args.image_url = videoThumb;
       args.message = c.primaryText; args.headline = c.headline; args.call_to_action_type = c.cta;
       if (c.description) args.description = c.description;
       if (c.cta !== "WHATSAPP_MESSAGE" && p.linkUrl) args.link_url = p.linkUrl;

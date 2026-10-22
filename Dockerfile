@@ -19,8 +19,10 @@ WORKDIR /app
 RUN npm init -y >/dev/null && npm install --omit=dev --no-audit --no-fund @node-rs/argon2@2
 
 FROM node:22-alpine
-ENV NODE_ENV=production TZ=Asia/Jakarta PORT=3000 STATIC_DIR=public MIGRATIONS_DIR=/app/migrations
+ENV NODE_ENV=production TZ=Asia/Jakarta PORT=3000 STATIC_DIR=public MIGRATIONS_DIR=/app/migrations MEDIA_DIR=/app/media
 WORKDIR /app
+# Lampiran chat sementara: di disk container (bukan /tmp yang tmpfs/RAM), dihapus setelah diterima Meta.
+RUN mkdir -p /app/media && chown node:node /app/media
 COPY --from=deps /app/node_modules ./node_modules
 COPY --from=build /app/apps/api/dist ./dist
 COPY --from=build /app/apps/web/dist ./public

@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
-import { Send, Bot, Zap, Check, Undo2, Square, Maximize2, Minimize2, X, RotateCcw, Sparkles } from "lucide-react";
+import { Send, Bot, Zap, Check, Undo2, Square, Maximize2, Minimize2, X, RotateCcw, Sparkles, Paperclip, Film, AlertCircle } from "lucide-react";
 import type { BotAction } from "@iklan/shared";
-import { useBootstrap, actionsApi, refreshData, ApiError } from "../lib/api";
+import { api, useBootstrap, actionsApi, refreshData, ApiError } from "../lib/api";
 import { setView, useView } from "../lib/view";
 import { actionSummary } from "../lib/campaign-action";
 import { accLabel } from "../components/pickers";
@@ -9,7 +9,8 @@ import { toast, cx } from "../components/ui";
 import { Markdown } from "./Markdown";
 import { Widget } from "./Widgets";
 import { LaunchPlan } from "./LaunchPlan";
-import { useChat, send, greet, updateAction, resetChat, stopChat, type Msg } from "./store";
+import { useChat, send, greet, updateAction, resetChat, stopChat, type Msg, type SentFile } from "./store";
+import { ACCEPT, fmtSize, precheck, uploadMedia, videoCover, type Pending } from "./media";
 
 const CHIPS = ["Ringkasan performa minggu ini", "Rekomendasi kampanye", "Kampanye paling boros?", "Jam paling cuan?", "Produk terlaris bulan ini", "Laba rugi bulan lalu"];
 
@@ -59,6 +60,27 @@ function ActionCard({ action }: { action: BotAction }) {
   );
 }
 
+/** Kotak kecil foto/video: pratinjau lokal, nama, ukuran, dan progres upload kalau masih jalan. */
+function FileThumb({ kind, preview, name, size, progress, error, onRemove }: {
+  kind: "image" | "video"; preview: string; name: string; size: number; progress?: number; error?: string; onRemove?: () => void;
+}) {
+  const uploading = progress != null && progress < 100 && !error;
+  return (
+    <div className={cx("relative flex w-[200px] items-center gap-2 rounded-xl border bg-card p-1.5 text-left text-ink", error ? "border-red" : "border-line")}>
+      <div className="relative size-11 shrink-0 overflow-hidden rounded-lg bg-bg">
+        {kind === "image" ? <img src={preview} alt="" className="size-full object-cover" />
+          : <><video src={preview} muted preload="metadata" className="size-full object-cover" /><Film size={14} className="absolute bottom-0.5 right-0.5 text-white drop-shadow" /></>}
+      </div>
+      <div className="min-w-0 flex-1 leading-tight">
+        <p className="truncate text-[12px] font-medium">{name}</p>
+        <p className={cx("text-[11px]", error ? "text-red-ink" : "text-muted")}>{error ?? (uploading ? `Mengupload ${progress}%` : fmtSize(size))}</p>
+        {uploading && <div className="mt-1 h-1 rounded-full bg-bg"><div className="h-1 rounded-full bg-accent transition-[width]" style={{ width: `${progress}%` }} /></div>}
+      </div>
+      {onRemove && <button type="button" onClick={onRemove} className="absolute -right-1.5 -top-1.5 grid size-5 place-items-center rounded-full bg-ink text-bg" aria-label={`Hapus ${name}`}><X size={12} /></button>}
+    </div>
+  );
+}
+
 const Typing = () => (
   <span className="inline-flex items-center gap-1 text-muted" aria-label="Bot sedang mengetik">
     <span className="size-1.5 animate-bounce rounded-full bg-current" /><span className="size-1.5 animate-bounce rounded-full bg-current [animation-delay:120ms]" /><span className="size-1.5 animate-bounce rounded-full bg-current [animation-delay:240ms]" />
@@ -99,7 +121,43 @@ export default function ChatView({ variant, onClose }: { variant: "panel" | "pag
   useEffect(() => { body.current?.scrollTo({ top: body.current.scrollHeight, behavior: "smooth" }); }, [msgs]);
   useEffect(() => { const el = ta.current; if (el) { el.style.height = "auto"; el.style.height = Math.min(el.scrollHeight, 160) + "px"; } }, [input]);
 
-  const submit = (t: string) => { if (!t.trim() || busy) return; setInput(""); void send(t, boot.accounts, owner); };
+  const [pending, setPending] = useState<Pending[]>([]);
+  const fileInput = useRef<HTMLInputElement>(null);
+  const uploading = pending.some((p) => !p.att && !p.error);
+  const ready = pending.filter((p) => p.att);
+  const upd = (key: string, f: (p: Pending) => Pending) => setPending((ps) => ps.map((p) => (p.key === key ? f(p) : p)));
+
+  const addFiles = (list: FileList | null) => {
+    for (const file of Array.from(list ?? []).slice(0, 4 - pending.length)) {
+      const key = crypto.randomUUID(), preview = URL.createObjectURL(file), bad = precheck(file);
+      setPending((ps) => [...ps, { key, file, preview, progress: 0, error: bad ?? undefined }]);
+      if (bad) continue;
+      const cover = file.type.startsWith("video/") ? videoCover(file) : null; // diambil paralel dengan upload video
+      uploadMedia(file, (pct) => upd(key, (p) => ({ ...p, progress: Math.min(pct, 99) })), (xhr) => upd(key, (p) => ({ ...p, xhr })))
+        .then(async (att) => {
+          // Lampiran baru dianggap siap setelah cover (kalau ada) ikut terupload; gagal cover tidak menggagalkan video.
+          const c = cover && (await cover);
+          if (c) await uploadMedia(c, () => {}, (xhr) => upd(key, (p) => ({ ...p, xhr })), att.id).catch(() => null);
+          upd(key, (p) => ({ ...p, att, progress: 100, xhr: undefined }));
+        })
+        .catch((e) => upd(key, (p) => ({ ...p, error: (e as Error).message, xhr: undefined })));
+    }
+  };
+  const removePending = (p: Pending) => {
+    p.xhr?.abort();
+    if (p.att) void api(`/chat/media/${p.att.id}`, { method: "DELETE" }).catch(() => {});
+    URL.revokeObjectURL(p.preview);
+    setPending((ps) => ps.filter((x) => x.key !== p.key));
+  };
+
+  const submit = (t: string) => {
+    if ((!t.trim() && !ready.length) || busy || uploading) return;
+    const files: SentFile[] = ready.map((p) => ({ ...p.att!, preview: p.preview }));
+    pending.filter((p) => !p.att).forEach((p) => URL.revokeObjectURL(p.preview)); // yang gagal dibuang
+    setPending([]);
+    setInput("");
+    void send(t, boot.accounts, owner, files);
+  };
   const status = boot.integration.aiConfigured ? "Claude · terhubung" : "Mode aturan · AI belum aktif";
 
   return (
@@ -123,7 +181,10 @@ export default function ChatView({ variant, onClose }: { variant: "panel" | "pag
 
       <div ref={body} className={cx("flex-1 space-y-4 overflow-y-auto py-4", page ? "px-1" : "px-4")} aria-live="polite">
         {msgs.map((m, i) => m.role === "user"
-          ? <div key={m.id} className="ml-auto w-fit max-w-[85%] whitespace-pre-wrap rounded-2xl rounded-br-md bg-accent px-3.5 py-2.5 text-[13.5px] text-accent-ink">{m.parts[0]?.type === "text" ? m.parts[0].text : ""}</div>
+          ? <div key={m.id} className="ml-auto flex w-fit max-w-[85%] flex-col items-end gap-1.5">
+              {m.files?.length ? <div className="flex flex-wrap justify-end gap-1.5">{m.files.map((f) => <FileThumb key={f.id} {...f} />)}</div> : null}
+              <div className="whitespace-pre-wrap rounded-2xl rounded-br-md bg-accent px-3.5 py-2.5 text-[13.5px] text-accent-ink">{m.parts[0]?.type === "text" ? m.parts[0].text : ""}</div>
+            </div>
           : <BotMessage key={m.id} m={m} last={i === msgs.length - 1} busy={busy} page={page} />)}
         {fresh && page && (
           <div className="grid gap-2 pt-2 sm:grid-cols-2">
@@ -139,13 +200,30 @@ export default function ChatView({ variant, onClose }: { variant: "panel" | "pag
           {CHIPS.map((c) => <button key={c} onClick={() => submit(c)} disabled={busy} className="shrink-0 rounded-full border border-line px-3 py-1.5 text-[12px] font-medium hover:border-accent hover:text-accent disabled:opacity-50">{c}</button>)}
         </div>
       )}
-      <form className={cx("flex items-end gap-2 border-t border-line py-3", page ? "px-1 pb-4" : "px-4 pb-[max(12px,env(safe-area-inset-bottom))]")} onSubmit={(e) => { e.preventDefault(); submit(input); }}>
-        <textarea ref={ta} rows={1} className="input max-h-40 min-h-[42px] resize-none py-2.5 leading-snug" placeholder="Tanya apa saja soal iklan & penjualan…  (Shift+Enter untuk baris baru)"
+      {pending.length > 0 && (
+        <div className={cx("flex flex-wrap gap-2 border-t border-line pt-3", page ? "px-1" : "px-4")}>
+          {pending.map((p) => (
+            <FileThumb key={p.key} kind={p.file.type.startsWith("video/") ? "video" : "image"} preview={p.preview} name={p.file.name} size={p.file.size}
+              progress={p.att ? undefined : p.progress} error={p.error} onRemove={() => removePending(p)} />
+          ))}
+          {pending.some((p) => p.error) && <p className="flex w-full items-center gap-1 text-[11.5px] text-red-ink"><AlertCircle size={13} /> Lampiran yang gagal tidak ikut terkirim.</p>}
+        </div>
+      )}
+      <form className={cx("flex items-end gap-2 border-t border-line py-3", page ? "px-1 pb-4" : "px-4 pb-[max(12px,env(safe-area-inset-bottom))]", pending.length > 0 && "border-t-0")} onSubmit={(e) => { e.preventDefault(); submit(input); }}>
+        {owner && (
+          <>
+            <input ref={fileInput} type="file" accept={ACCEPT} multiple hidden onChange={(e) => { addFiles(e.target.files); e.target.value = ""; }} />
+            <button type="button" className="btn size-[42px] shrink-0 p-0" onClick={() => fileInput.current?.click()} disabled={busy || pending.length >= 4}
+              title="Lampirkan foto/video untuk iklan (JPG/PNG maks. 30 MB, MP4/MOV maks. 100 MB)" aria-label="Lampirkan foto atau video"><Paperclip size={17} /></button>
+          </>
+        )}
+        <textarea ref={ta} rows={1} className="input max-h-40 min-h-[42px] resize-none py-2.5 leading-snug" placeholder={ready.length ? "Jelaskan iklannya: akun, tujuan, budget/hari…" : "Tanya apa saja soal iklan & penjualan…  (Shift+Enter untuk baris baru)"}
           value={input} onChange={(e) => setInput(e.target.value)} maxLength={2000} aria-label="Pesan untuk bot"
           onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) { e.preventDefault(); submit(input); } }} />
         {busy
           ? <button type="button" onClick={stopChat} className="btn size-[42px] shrink-0 p-0" aria-label="Hentikan jawaban" title="Hentikan"><Square size={15} /></button>
-          : <button className="btn btn-primary size-[42px] shrink-0 p-0" disabled={!input.trim()} aria-label="Kirim"><Send size={17} /></button>}
+          : <button className="btn btn-primary size-[42px] shrink-0 p-0" disabled={(!input.trim() && !ready.length) || uploading} aria-label="Kirim"
+              title={uploading ? "Tunggu upload selesai" : undefined}><Send size={17} /></button>}
       </form>
     </div>
   );

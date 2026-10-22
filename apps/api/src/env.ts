@@ -26,6 +26,8 @@ const schema = z.object({
   SYNC_ENABLED: z.enum(["true", "false"]).default("true"),
   CHAT_RATE_PER_HOUR: z.coerce.number().default(60),
   STATIC_DIR: z.string().default("public"),
+  // Folder sementara foto/video lampiran chat (harus di disk, bukan tmpfs: video bisa 100 MB). Kosong = folder temp OS.
+  MEDIA_DIR: z.string().optional(),
 });
 
 const parsed = schema.safeParse(process.env);

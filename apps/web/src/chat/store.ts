@@ -1,12 +1,17 @@
 // State chat bersama untuk panel melayang dan halaman chat penuh, supaya percakapan tidak hilang saat berpindah.
 import { useSyncExternalStore } from "react";
-import { parseIntent, fmtRange, PRESET_LABELS, rpk, dec, type Account, type BotAction, type ChatEvent, type ChatWidget, type RuleField } from "@iklan/shared";
+import {
+  parseIntent, fmtRange, PRESET_LABELS, rpk, dec, attachmentLine,
+  type Account, type BotAction, type ChatAttachment, type ChatEvent, type ChatWidget, type RuleField,
+} from "@iklan/shared";
 import { api, actionsApi, refreshData, ApiError } from "../lib/api";
 import { setView, getView } from "../lib/view";
 import { accLabel } from "../components/pickers";
 
 export type Part = { type: "text"; text: string } | { type: "widget"; widget: ChatWidget };
-export type Msg = { id: number; role: "user" | "bot"; parts: Part[]; ctx?: string; action?: BotAction; error?: boolean };
+/** Lampiran yang sudah terkirim; `preview` object URL lokal untuk ditampilkan di gelembung chat. */
+export type SentFile = ChatAttachment & { preview: string };
+export type Msg = { id: number; role: "user" | "bot"; parts: Part[]; ctx?: string; action?: BotAction; error?: boolean; files?: SentFile[] };
 
 const RULE_LABEL: Record<RuleField, [string, (v: number) => string]> = {
   targetRoas: ["Target ROAS", (v) => dec(v) + "x"], maxCpa: ["Batas CPA", rpk], maxCpl: ["Batas CPL", rpk],
@@ -35,15 +40,22 @@ export function greet() {
   if (!state.msgs.length) botText("Halo! Gw bot iklan lo, otaknya Claude. Tanya angka, minta analisis, pindah akun atau periode, ubah aturan, sampai pause / scale kampanye, semua bisa dari sini.");
 }
 export function updateAction(a: BotAction) { set({ msgs: state.msgs.map((m) => (m.action?.id === a.id ? { ...m, action: a } : m)) }); }
-export function resetChat() { abort?.abort(); conv = crypto.randomUUID(); set({ msgs: [], busy: false }); greet(); }
+export function resetChat() {
+  abort?.abort();
+  state.msgs.forEach((m) => m.files?.forEach((f) => URL.revokeObjectURL(f.preview)));
+  conv = crypto.randomUUID(); set({ msgs: [], busy: false }); greet();
+}
+/** Teks pesan + baris lampiran, persis seperti yang dibaca bot (untuk riwayat). */
+const historyText = (m: Msg) => [textOf(m), ...(m.files ?? []).map(attachmentLine)].filter(Boolean).join("\n\n");
 export function stopChat() { abort?.abort(); }
 
-export async function send(raw: string, accounts: Account[], owner: boolean) {
-  const text = raw.trim();
+export async function send(raw: string, accounts: Account[], owner: boolean, files: SentFile[] = []) {
+  const text = raw.trim() || (files.length ? "Tolong iklankan lampiran ini." : "");
   if (!text || state.busy) return;
   const ctxLine = () => { const v = getView(); return `${accLabel(v.acc, accounts)} · ${fmtRange(v.from, v.to)}`; };
-  push({ role: "user", parts: [{ type: "text", text }] });
-  const it = parseIntent(text, accounts);
+  push({ role: "user", parts: [{ type: "text", text }], ...(files.length ? { files } : {}) });
+  // Pesan berlampiran selalu ke bot (bukan konfirmasi/pindah tampilan lokal).
+  const it = files.length ? {} as ReturnType<typeof parseIntent> : parseIntent(text, accounts);
 
   // 1) Konfirmasi "ya"/"batal" untuk kartu aksi terakhir — diproses lokal, bukan oleh AI.
   if (it.confirm) {
@@ -87,12 +99,12 @@ export async function send(raw: string, accounts: Account[], owner: boolean) {
   set({ busy: true });
   abort = new AbortController();
   const v = getView();
-  const history = state.msgs.filter((m) => textOf(m) && !m.error).slice(-13, -1).map((m) => ({ role: m.role === "user" ? "user" : "assistant", content: textOf(m).slice(0, 4000) }));
+  const history = state.msgs.filter((m) => textOf(m) && !m.error).slice(-13, -1).map((m) => ({ role: m.role === "user" ? "user" : "assistant", content: historyText(m).slice(0, 4000) }));
   const botId = push({ role: "bot", parts: [], ctx: ctxLine() });
   try {
     const res = await fetch("/api/chat", {
       method: "POST", headers: { "Content-Type": "application/json" }, credentials: "same-origin", signal: abort.signal,
-      body: JSON.stringify({ message: text, history, context: { acc: v.acc, from: v.from, to: v.to }, conversationId: conv }),
+      body: JSON.stringify({ message: text, history, context: { acc: v.acc, from: v.from, to: v.to }, conversationId: conv, attachments: files.map((f) => f.id) }),
     });
     if (!res.ok || !res.body) throw new ApiError((await res.json().catch(() => ({}))).error || "Bot tidak bisa dihubungi", res.status);
     const reader = res.body.getReader(), td = new TextDecoder();

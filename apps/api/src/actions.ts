@@ -9,7 +9,7 @@ import { fetchActiveAdsets, fetchCampaignState, setDailyBudget, setStatus } from
 import { emit } from "./events";
 import { errMsg, log } from "./log";
 import { loadConfig } from "./scope";
-import { executeLaunch, pauseLaunched, validateLaunchPlan, type LaunchPlan, type LaunchResult } from "./meta/launch";
+import { assertLaunchMediaReady, executeLaunch, pauseLaunched, validateLaunchPlan, type LaunchPlan, type LaunchResult } from "./meta/launch";
 import { runSync } from "./meta/sync";
 
 export type CampaignAction = "pause" | "activate" | "scale";
@@ -168,6 +168,8 @@ async function apply(campaignId: string, p: Params, target: "after" | "before") 
 }
 
 export async function confirmAction(id: number): Promise<BotAction> {
+  const [pre] = await sql`SELECT action, params FROM bot_actions WHERE id = ${id} AND status = 'pending'`;
+  if (pre?.action === "launch") await assertLaunchMediaReady(pre.params.plan);
   // Klaim atomik: expires_at dikosongkan, jadi konfirmasi kedua (klik dobel) tidak lolos lagi.
   const [claimed] = await sql`
     UPDATE bot_actions SET expires_at = NULL

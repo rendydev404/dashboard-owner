@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const calls: { tool: string; args: any }[] = [];
 let failAt: string | null = null;
+let videoState = "ready";
 vi.mock("../src/meta/mcp", () => ({
   conversationId: () => "conv-test",
   unwrap: (x: unknown) => (typeof x === "string" && /^\s*[\[{]/.test(x) ? JSON.parse(x) : x),
@@ -18,6 +19,7 @@ vi.mock("../src/meta/mcp", () => ({
       case "ads_create_creative": return { creative_id: "k1" };
       case "ads_create_ad": return { ad_id: "a1", status: "DRAFT" };
       case "ads_activate_entity": return { status: "ACTIVE" };
+      case "ads_get_ad_videos": return { ad_videos: [{ id: "4476160626027557", picture: "https://fbcdn/t160.jpg", status: { video_status: videoState } }] };
     }
     return {};
   }),
@@ -95,5 +97,41 @@ describe("traffic", () => {
     const adset = calls.find((c) => c.tool === "ads_create_ad_set")!.args;
     expect(adset).toMatchObject({ optimization_goal: "LANDING_PAGE_VIEWS", destination_type: "WEBSITE" });
     expect(adset.promoted_object).toBeUndefined();
+  });
+});
+
+describe("iklan video dari lampiran chat", () => {
+  const video = (extra: object = {}) => launchPlanSchema.parse({
+    ...plan, objective: "leads_whatsapp", pixelId: undefined, linkUrl: undefined,
+    creative: { type: "new", videoId: "4476160626027557", primaryText: "Video promosi jadi 1x24 jam, mulai Rp250 rb.", headline: "Jasa Video AI", cta: "WHATSAPP_MESSAGE", ...extra },
+  });
+  beforeEach(() => { calls.length = 0; failAt = null; videoState = "ready"; });
+
+  it("cover dari browser (imageHash) dipakai sebagai thumbnail, tanpa cek video ke Meta", async () => {
+    await executeLaunch(video({ imageHash: "cover-hash" }));
+    const cr = calls.find((c) => c.tool === "ads_create_creative")!.args;
+    expect(cr).toMatchObject({ video_id: "4476160626027557", image_hash: "cover-hash", call_to_action_type: "WHATSAPP_MESSAGE" });
+    expect(cr.image_url).toBeUndefined();
+    expect(calls.some((c) => c.tool === "ads_get_ad_videos")).toBe(false);
+  });
+
+  it("tanpa cover: thumbnail Meta dipakai setelah video siap", async () => {
+    const r = await executeLaunch(video());
+    expect(calls[0].tool).toBe("ads_get_ad_videos");
+    expect(calls.find((c) => c.tool === "ads_create_creative")!.args).toMatchObject({ video_id: "4476160626027557", image_url: "https://fbcdn/t160.jpg" });
+    expect(r.steps.every((s) => s.ok)).toBe(true);
+  });
+
+  it("video masih diproses: tidak ada yang dibuat, dan konfirmasi ditolak 409 tanpa menghanguskan aksi", async () => {
+    videoState = "processing";
+    const r = await executeLaunch(video());
+    expect(calls.map((c) => c.tool)).toEqual(["ads_get_ad_videos"]);
+    expect(r.campaignId).toBeNull();
+    expect(r.steps[0]).toMatchObject({ step: "creative", ok: false });
+    const { assertLaunchMediaReady } = await import("../src/meta/launch");
+    await expect(assertLaunchMediaReady(video())).rejects.toMatchObject({ status: 409 });
+    videoState = "ready";
+    await expect(assertLaunchMediaReady(video())).resolves.toBeUndefined();
+    await expect(assertLaunchMediaReady(video({ imageHash: "cover-hash" }))).resolves.toBeUndefined();
   });
 });

@@ -156,6 +156,13 @@ export type ChatWidget =
     };
 
 /** Event stream dari /api/chat. */
+/** Foto/video yang dilampirkan di chat. Filenya sementara di disk server (bukan database) sampai diterima Meta. */
+export interface ChatAttachment { id: string; kind: "image" | "video"; name: string; size: number; mime: string }
+
+/** Baris yang dibaca bot untuk tiap lampiran (dipakai server & riwayat chat di browser supaya formatnya sama). */
+export const attachmentLine = (a: ChatAttachment) =>
+  `[Lampiran ${a.kind === "video" ? "video" : "foto"} · media_id=${a.id} · ${a.name} · ${(a.size / 1048576).toFixed(1).replace(".", ",")} MB]`;
+
 export type ChatEvent =
   | { type: "text"; text: string }
   | { type: "widget"; widget: ChatWidget }

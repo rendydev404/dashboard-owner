@@ -8,9 +8,10 @@ import { z } from "zod";
 import { randomUUID } from "node:crypto";
 import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
+import { Readable } from "node:stream";
 import {
   type Bootstrap, type ManualItem, type ChatEvent, type ServerEvent,
-  parseRp, isDateKey, todayKey, hourNow, DEFAULT_SETTINGS,
+  parseRp, isDateKey, todayKey, hourNow, DEFAULT_SETTINGS, attachmentLine,
 } from "@iklan/shared";
 import { sql, dataVersion, bumpDataVersion } from "./db";
 import { env, metaConfigured, metaMode, aiConfigured, lynkConfigured } from "./env";
@@ -26,6 +27,7 @@ import { fbAds, lynkStats } from "./queries-tabs";
 import { handleLynkWebhook } from "./lynk";
 import { createCampaignAction, confirmAction, cancelAction, revertAction, listActions, getAction } from "./actions";
 import { handleChat, updateRule } from "./bot";
+import { MEDIA_LIMITS, MediaError, attachmentOf, getMedia, openByToken, removeMedia, saveMedia } from "./media";
 import { mcpHandler } from "./mcp-server";
 import { runSync, lastMetaError, fetchAccountInfo } from "./meta/sync";
 import { subscribe } from "./events";
@@ -35,7 +37,8 @@ export const app = new Hono<AppEnv>();
 
 app.use("*", secureHeaders({
   contentSecurityPolicy: {
-    defaultSrc: ["'self'"], imgSrc: ["'self'", "data:"], connectSrc: ["'self'"], styleSrc: ["'self'", "'unsafe-inline'"],
+    // blob: = pratinjau lokal lampiran foto/video di chat (object URL, tidak dikirim ke mana pun).
+    defaultSrc: ["'self'"], imgSrc: ["'self'", "data:", "blob:"], mediaSrc: ["'self'", "blob:"], connectSrc: ["'self'"], styleSrc: ["'self'", "'unsafe-inline'"],
     scriptSrc: ["'self'"], fontSrc: ["'self'"], frameAncestors: ["'none'"], baseUri: ["'self'"], formAction: ["'self'"],
   },
   crossOriginEmbedderPolicy: false,
@@ -47,6 +50,7 @@ app.use("/api/*", sameOrigin);
 
 app.onError((err, c) => {
   if (err instanceof HTTPException) return c.json({ error: err.message }, err.status);
+  if (err instanceof MediaError) return c.json({ error: err.message }, err.status);
   if (err instanceof z.ZodError) return c.json({ error: "Input tidak valid", details: err.flatten().fieldErrors }, 400);
   log.error("unhandled", { path: c.req.path, error: errMsg(err) });
   return c.json({ error: "Terjadi kesalahan di server" }, 500);
@@ -68,6 +72,21 @@ app.post("/webhooks/lynk", rateLimit(120, 60_000, clientIp), async (c) => {
   if (raw.length > 64_000) return c.json({ ok: false, error: "Payload terlalu besar" }, 413);
   const res = await handleLynkWebhook(raw, c.req.header("x-lynk-signature"));
   return c.json(res.body, res.status);
+});
+
+// Link publik sementara lampiran chat, diunduh Meta saat upload media iklan. Token acak 192-bit, mati setelah file
+// diterima Meta / 2 jam. Tanpa cookie karena yang mengakses server Meta.
+app.on(["GET", "HEAD"], "/m/:token/:name?", rateLimit(120, 60_000, clientIp), (c) => {
+  const f = openByToken(c.req.param("token"));
+  if (!f) return c.text("Tidak ditemukan", 404);
+  const { entry: e } = f;
+  log.info("lampiran diunduh", { id: e.id, ua: (c.req.header("user-agent") ?? "").slice(0, 80) });
+  const headers = {
+    "Content-Type": e.mime, "Content-Length": String(e.size), "Cache-Control": "private, no-store",
+    "Content-Disposition": `inline; filename="${e.name}"`, "X-Robots-Tag": "noindex, nofollow",
+  };
+  if (c.req.method === "HEAD") return c.body(null, 200, headers);
+  return c.body(Readable.toWeb(f.stream()) as ReadableStream, 200, headers);
 });
 
 /* ---------------------------------------------------------------- auth */
@@ -257,15 +276,34 @@ api.post("/chat", chatLimiter, async (c) => {
     history: z.array(z.object({ role: z.enum(["user", "assistant"]), content: z.string().max(4000) })).max(30).default([]),
     context: z.object({ acc: z.string(), from: z.string().refine(isDateKey), to: z.string().refine(isDateKey) }),
     conversationId: z.string().uuid().optional(),
+    attachments: z.array(z.string().max(40)).max(4).default([]),
   }).parse(await c.req.json());
   const user = c.get("user");
+  // Lampiran dikenalkan ke bot sebagai baris teks berisi media_id (bot memakainya di upload_media_to_meta).
+  const files = b.attachments.map((id) => getMedia(id, user.id));
+  if (files.some((f) => !f)) throw new HTTPException(400, { message: "Lampiran sudah kedaluwarsa atau dihapus. Upload ulang file-nya." });
+  const message = files.length ? `${b.message}\n\n${files.map((f) => attachmentLine(attachmentOf(f!))).join("\n")}` : b.message;
   return streamSSE(c, async (stream) => {
     // Tulis berurutan dan tunggu semuanya terkirim sebelum stream ditutup.
     let chain = Promise.resolve();
     const send = (e: ChatEvent) => { chain = chain.then(() => stream.writeSSE({ data: JSON.stringify(e) })).catch(() => {}); };
-    await handleChat({ ...b, conversationId: b.conversationId ?? randomUUID() }, user, send);
+    await handleChat({ ...b, message, conversationId: b.conversationId ?? randomUUID() }, user, send);
     await chain;
   });
+});
+
+// Lampiran foto/video untuk iklan. Body = isi file mentah (dialirkan ke disk, tidak ditampung di RAM).
+const mediaLimiter = rateLimit(30, 3600_000, (c) => "media:" + (c as Context<AppEnv>).get("user").id);
+api.put("/chat/media", owner, mediaLimiter, async (c) => {
+  if (Number(c.req.header("content-length") ?? 0) > MEDIA_LIMITS.video) throw new MediaError(`File terlalu besar. Maksimal video ${MEDIA_LIMITS.video / 1048576} MB.`, 413);
+  let name = "lampiran";
+  try { name = decodeURIComponent(c.req.header("x-file-name") ?? name); } catch { /* nama default */ }
+  const coverFor = c.req.header("x-cover-for") || undefined; // frame cover yang diambil browser dari video
+  return c.json(await saveMedia(c.req.raw.body, { name, userId: c.get("user").id, coverFor }), 201);
+});
+api.delete("/chat/media/:id", owner, async (c) => {
+  await removeMedia(c.req.param("id"), c.get("user").id);
+  return c.json({ ok: true });
 });
 
 /* ---------------------------------------------------------------- pengaturan */
