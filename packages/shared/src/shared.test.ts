@@ -132,6 +132,17 @@ describe("rules", () => {
     expect(recFor({ status: "ACTIVE", spend: 100_000, purchases: 0, leads: 1, revenue: 0 }, "jasa", J).code).toBe("creative");
     expect(recFor({ status: "ACTIVE", spend: 100_000, purchases: 0, leads: 3, revenue: 0 }, "jasa", J).code).toBe("keep");
   });
+  it("belum ganti kreatif sebelum spend seharga satu hasil (batas CPL/CPA)", () => {
+    // Kasus nyata akun -03: kampanye baru Rp12, 0 lead → bukan "Ganti kreatif".
+    expect(recFor({ status: "ACTIVE", spend: 12, purchases: 0, leads: 0, revenue: 0 }, "jasa", J)).toEqual({ code: "keep", label: "Kumpulkan data", tone: "neutral" });
+    expect(recFor({ status: "ACTIVE", spend: 59_999, purchases: 0, leads: 0, revenue: 0 }, "jasa", J).label).toBe("Kumpulkan data");
+    expect(recFor({ status: "ACTIVE", spend: 60_000, purchases: 0, leads: 0, revenue: 0 }, "jasa", J).code).toBe("creative");
+    expect(recFor({ status: "ACTIVE", spend: 30_000, purchases: 0, leads: 0, revenue: 0 }, "digital", D).label).toBe("Kumpulkan data");
+    expect(recFor({ status: "ACTIVE", spend: 45_000, purchases: 0, leads: 0, revenue: 0 }, "digital", D).code).toBe("creative");
+    // Tanpa batas CPA: patokan setengah batas "matikan setelah spend".
+    expect(recFor({ status: "ACTIVE", spend: 40_000, purchases: 0, leads: 0, revenue: 0 }, "digital", { ...D, maxCpa: null }).label).toBe("Kumpulkan data");
+    expect(recFor({ status: "ACTIVE", spend: 50_000, purchases: 0, leads: 0, revenue: 0 }, "digital", { ...D, maxCpa: null }).code).toBe("creative");
+  });
 });
 
 describe("intent", () => {

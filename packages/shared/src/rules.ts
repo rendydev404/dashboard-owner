@@ -36,7 +36,10 @@ export function recFor(c: CampaignPerf, line: Line, st: AccountSettings): Rec {
   const overLimit = jasa ? st.maxCpl != null && cpl > st.maxCpl : st.maxCpa != null && cpa > st.maxCpa;
   if (c.spend >= st.killAfterSpend && overLimit) return { code: "kill", label: "Matikan", tone: "red" };
   if (c.spend > 0 && roas >= st.targetRoas * 1.3) return { code: "scale", label: `Scale +${st.scaleStepPct}%`, tone: "green" };
-  if (jasa) return overLimit ? { code: "creative", label: "Ganti kreatif", tone: "yellow" } : { code: "keep", label: "Pertahankan", tone: "neutral" };
-  if (c.spend > 0 && roas < st.targetRoas) return { code: "creative", label: "Ganti kreatif", tone: "yellow" };
+  // Kreatif baru boleh divonis setelah spend minimal seharga satu hasil yang diharapkan (batas CPL/CPA akun).
+  const evidence = (jasa ? st.maxCpl : st.maxCpa) ?? st.killAfterSpend / 2;
+  const failing = jasa ? overLimit : c.spend > 0 && roas < st.targetRoas;
+  if (failing && c.spend < evidence) return { code: "keep", label: "Kumpulkan data", tone: "neutral" };
+  if (failing) return { code: "creative", label: "Ganti kreatif", tone: "yellow" };
   return { code: "keep", label: "Pertahankan", tone: "neutral" };
 }
