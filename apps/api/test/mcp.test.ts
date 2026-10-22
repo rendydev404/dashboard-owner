@@ -129,3 +129,31 @@ describe("parser respons asli Meta → baris DB", () => {
     expect(leadsOf({ lead: "4" }, "digital")).toBe(0);
   });
 });
+
+describe("koneksi ke Meta", () => {
+  const errOf = (p: Promise<unknown>) => p.then(() => null, (e) => e);
+  it("gagal tersambung (permintaan belum terkirim) boleh diulang", async () => {
+    const { isConnectError } = await import("../src/meta/mcp");
+    const closed = createServer();
+    await new Promise<void>((r) => closed.listen(0, "127.0.0.1", r));
+    const port = (closed.address() as any).port;
+    await new Promise((r) => closed.close(r));
+    expect(isConnectError(await errOf(fetch(`http://127.0.0.1:${port}/`)))).toBe(true);
+    // Format error AggregateError dari happy eyeballs (IPv4 timeout + IPv6 unreachable) di VPS 3.
+    const agg = Object.assign(new AggregateError([
+      Object.assign(new Error("connect ETIMEDOUT 57.144.24.141:443"), { code: "ETIMEDOUT", syscall: "connect" }),
+      Object.assign(new Error("connect ENETUNREACH 2a03:2880::2:443"), { code: "ENETUNREACH", syscall: "connect" }),
+    ]), { code: "ETIMEDOUT" });
+    expect(isConnectError(new TypeError("fetch failed", { cause: agg }))).toBe(true);
+  });
+  it("putus setelah permintaan terkirim TIDAK diulang (bisa dobel aksi tulis)", async () => {
+    const { isConnectError } = await import("../src/meta/mcp");
+    const rude = createServer((req) => req.socket.destroy());
+    await new Promise<void>((r) => rude.listen(0, "127.0.0.1", r));
+    const e = await errOf(fetch(`http://127.0.0.1:${(rude.address() as any).port}/`, { method: "POST", body: "{}" }));
+    await new Promise((r) => rude.close(r));
+    expect(e).toBeInstanceOf(Error);
+    expect(isConnectError(e)).toBe(false);
+    expect(isConnectError(new Error("tanpa cause"))).toBe(false);
+  });
+});

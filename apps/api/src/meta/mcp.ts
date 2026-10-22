@@ -43,6 +43,17 @@ export function tokenStatus(): { ok: boolean; expiresAt: string | null; error: s
 }
 export const mcpAvailable = () => existsSync(env.META_MCP_CRED);
 
+const CONNECT_ATTEMPTS = 5;
+
+/** fetch gagal SEBELUM tersambung (TCP connect/DNS), jadi permintaan belum sampai ke Meta dan aman diulang, termasuk aksi tulis. */
+export function isConnectError(e: unknown): boolean {
+  const c: any = (e as any)?.cause;
+  if (!c) return false;
+  if (c.code === "UND_ERR_CONNECT_TIMEOUT") return true;
+  const errs: any[] = Array.isArray(c.errors) && c.errors.length ? c.errors : [c];
+  return errs.every((x) => x?.syscall === "connect" || x?.syscall === "getaddrinfo");
+}
+
 class Client {
   private sid: string | null = null;
   private n = 0;
@@ -54,8 +65,14 @@ class Client {
     };
     if (this.sid) { headers["Mcp-Session-Id"] = this.sid; headers["Mcp-Protocol-Version"] = "2025-06-18"; }
     let res: Response;
-    try { res = await fetch(env.META_MCP_URL, { method: "POST", headers, body: JSON.stringify(body), signal: AbortSignal.timeout(150_000) }); }
-    catch (e) { throw new McpError(`Koneksi ke Meta gagal: ${(e as Error).message}`, "net"); }
+    for (let attempt = 1; ; attempt++) {
+      try { res = await fetch(env.META_MCP_URL, { method: "POST", headers, body: JSON.stringify(body), signal: AbortSignal.timeout(150_000) }); break; }
+      catch (e) {
+        // Dari VPS 3 ±20% koneksi baru ke edge Meta hilang di jaringan; koneksi berikutnya (port sumber lain) biasanya lancar.
+        if (isConnectError(e) && attempt < CONNECT_ATTEMPTS) { await new Promise((r) => setTimeout(r, 300 * attempt)); continue; }
+        throw new McpError(`Koneksi ke Meta gagal: ${(e as Error).message}${attempt > 1 ? ` (setelah ${attempt}x coba)` : ""}`, "net");
+      }
+    }
     this.sid = res.headers.get("mcp-session-id") ?? this.sid;
     if (!res.ok) {
       const detail = (await res.text().catch(() => "")).slice(0, 300);
