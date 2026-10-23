@@ -161,9 +161,9 @@ button, input, select, textarea { font: inherit; color: inherit; }
   main { padding: 0 !important; margin: 0 !important; }
 }
 
-/* Maskot Bot Iklan (components/AdBot.tsx). Hanya transform & opacity → dikerjakan compositor, tidak memicu layout. */
-.adbot { overflow: visible; flex-shrink: 0; }
-.adbot g, .adbot rect, .adbot circle, .adbot path { transform-box: fill-box; transform-origin: center; }
+/* Maskot Bot Iklan (components/AdBot.tsx). Kelas sengaja bukan "adbot": EasyList menyembunyikan `.adbot`. Hanya transform & opacity → dikerjakan compositor, tidak memicu layout. */
+.mascot { overflow: visible; flex-shrink: 0; }
+.mascot g, .mascot rect, .mascot circle, .mascot path { transform-box: fill-box; transform-origin: center; }
 .ab-float { animation: ab-float 3.4s ease-in-out infinite; }
 .ab-eyes { transform: translate(var(--ex, 0px), var(--ey, 0px)); transition: transform .3s cubic-bezier(.2, .8, .3, 1), opacity .2s; }
 .ab-open { animation: ab-blink 4.8s infinite; transition: opacity .2s; }
@@ -174,23 +174,23 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .ab-arm { transform-origin: 50% 12%; }
 .ab-face { transition: transform .35s cubic-bezier(.3, 1.6, .5, 1); }
 
-.adbot[data-mood="think"] .ab-eyes { animation: ab-scan 1.7s ease-in-out infinite; }
-.adbot[data-mood="think"] .ab-ring { animation: ab-ring 1.7s ease-out infinite; }
-.adbot[data-mood="think"] .ab-ring2 { animation-delay: .85s; }
-.adbot[data-mood="think"] .ab-bulb { animation: ab-bulb .85s ease-in-out infinite alternate; }
-.adbot[data-mood="think"] .ab-face { transform: rotate(-4deg); }
-.adbot[data-mood="talk"] .ab-smile { opacity: 0; }
-.adbot[data-mood="talk"] .ab-eq { opacity: 1; }
-.adbot[data-mood="talk"] .ab-eq rect { animation: ab-eq .42s ease-in-out infinite alternate; }
-.adbot[data-mood="talk"] .ab-eq rect:nth-child(2) { animation-delay: .14s; }
-.adbot[data-mood="talk"] .ab-eq rect:nth-child(3) { animation-delay: .28s; }
-.adbot[data-mood="happy"] .ab-open { opacity: 0; }
-.adbot[data-mood="happy"] .ab-joy { opacity: 1; }
-.adbot[data-mood="happy"] .ab-smile { transform: scale(1.35); }
-.adbot[data-mood="happy"] .ab-float { animation: ab-hop .55s cubic-bezier(.3, 1.5, .5, 1) 2; }
-.adbot[data-mood="sad"] .ab-open { transform: scaleY(.55); animation: none; }
-.adbot[data-mood="sad"] .ab-smile { transform: scaleY(-1) translateY(-2px); }
-.adbot[data-mood="sad"] .ab-face { transform: rotate(6deg) translateY(2px); }
+.mascot[data-mood="think"] .ab-eyes { animation: ab-scan 1.7s ease-in-out infinite; }
+.mascot[data-mood="think"] .ab-ring { animation: ab-ring 1.7s ease-out infinite; }
+.mascot[data-mood="think"] .ab-ring2 { animation-delay: .85s; }
+.mascot[data-mood="think"] .ab-bulb { animation: ab-bulb .85s ease-in-out infinite alternate; }
+.mascot[data-mood="think"] .ab-face { transform: rotate(-4deg); }
+.mascot[data-mood="talk"] .ab-smile { opacity: 0; }
+.mascot[data-mood="talk"] .ab-eq { opacity: 1; }
+.mascot[data-mood="talk"] .ab-eq rect { animation: ab-eq .42s ease-in-out infinite alternate; }
+.mascot[data-mood="talk"] .ab-eq rect:nth-child(2) { animation-delay: .14s; }
+.mascot[data-mood="talk"] .ab-eq rect:nth-child(3) { animation-delay: .28s; }
+.mascot[data-mood="happy"] .ab-open { opacity: 0; }
+.mascot[data-mood="happy"] .ab-joy { opacity: 1; }
+.mascot[data-mood="happy"] .ab-smile { transform: scale(1.35); }
+.mascot[data-mood="happy"] .ab-float { animation: ab-hop .55s cubic-bezier(.3, 1.5, .5, 1) 2; }
+.mascot[data-mood="sad"] .ab-open { transform: scaleY(.55); animation: none; }
+.mascot[data-mood="sad"] .ab-smile { transform: scaleY(-1) translateY(-2px); }
+.mascot[data-mood="sad"] .ab-face { transform: rotate(6deg) translateY(2px); }
 .ab-waving .ab-arm { animation: ab-wave 1.05s ease-in-out; }
 .ab-waving .ab-face { transform: rotate(5deg); }
 
@@ -224,6 +224,6 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .ab-still, .ab-still * { animation: none !important; }
 
 @media (prefers-reduced-motion: reduce) {
-  .adbot, .adbot *, .ab-status, .ab-bar::after, .ab-step { animation: none !important; }
+  .mascot, .mascot *, .ab-status, .ab-bar::after, .ab-step { animation: none !important; }
   .ab-status { color: var(--muted); }
 }

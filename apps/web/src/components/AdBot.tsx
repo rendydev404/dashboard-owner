@@ -1,4 +1,4 @@
-// Maskot "Bot Iklan": SVG inline + animasi CSS (transform/opacity saja, tanpa library), gaya di styles.css (.adbot).
+// Maskot "Bot Iklan": SVG inline + animasi CSS (transform/opacity saja, tanpa library), gaya di styles.css (.mascot; bukan .adbot karena disembunyikan EasyList).
 // mood: idle (melayang & berkedip) · think (mata memindai, antena memancar sinyal) · talk (mulut equalizer) · happy · sad.
 import { useEffect, useRef, useState, type CSSProperties } from "react";
 import { cx } from "./ui";
@@ -42,7 +42,7 @@ export function AdBot({ size = 40, mood = "idle", head, track, wave, className, 
 
   return (
     <svg ref={ref} width={size} height={size} viewBox={head ? "8 2 84 76" : "0 0 100 100"} aria-hidden data-mood={mood}
-      className={cx("adbot", head && "adbot-head", waving && "ab-waving", className)} style={style}>
+      className={cx("mascot", head && "mascot-head", waving && "ab-waving", className)} style={style}>
       <g className="ab-float">
         <circle className="ab-ring" cx="50" cy="11" r="5" />
         <circle className="ab-ring ab-ring2" cx="50" cy="11" r="5" />
