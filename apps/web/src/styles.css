@@ -160,3 +160,70 @@ button, input, select, textarea { font: inherit; color: inherit; }
   .card { box-shadow: none; break-inside: avoid; }
   main { padding: 0 !important; margin: 0 !important; }
 }
+
+/* Maskot Bot Iklan (components/AdBot.tsx). Hanya transform & opacity → dikerjakan compositor, tidak memicu layout. */
+.adbot { overflow: visible; flex-shrink: 0; }
+.adbot g, .adbot rect, .adbot circle, .adbot path { transform-box: fill-box; transform-origin: center; }
+.ab-float { animation: ab-float 3.4s ease-in-out infinite; }
+.ab-eyes { transform: translate(var(--ex, 0px), var(--ey, 0px)); transition: transform .3s cubic-bezier(.2, .8, .3, 1), opacity .2s; }
+.ab-open { animation: ab-blink 4.8s infinite; transition: opacity .2s; }
+.ab-joy, .ab-eq { opacity: 0; transition: opacity .2s; }
+.ab-smile { transition: transform .3s, opacity .2s; }
+.ab-bulb { fill: var(--yellow); }
+.ab-ring { fill: none; stroke: var(--yellow); stroke-width: 1.6; opacity: 0; }
+.ab-arm { transform-origin: 50% 12%; }
+.ab-face { transition: transform .35s cubic-bezier(.3, 1.6, .5, 1); }
+
+.adbot[data-mood="think"] .ab-eyes { animation: ab-scan 1.7s ease-in-out infinite; }
+.adbot[data-mood="think"] .ab-ring { animation: ab-ring 1.7s ease-out infinite; }
+.adbot[data-mood="think"] .ab-ring2 { animation-delay: .85s; }
+.adbot[data-mood="think"] .ab-bulb { animation: ab-bulb .85s ease-in-out infinite alternate; }
+.adbot[data-mood="think"] .ab-face { transform: rotate(-4deg); }
+.adbot[data-mood="talk"] .ab-smile { opacity: 0; }
+.adbot[data-mood="talk"] .ab-eq { opacity: 1; }
+.adbot[data-mood="talk"] .ab-eq rect { animation: ab-eq .42s ease-in-out infinite alternate; }
+.adbot[data-mood="talk"] .ab-eq rect:nth-child(2) { animation-delay: .14s; }
+.adbot[data-mood="talk"] .ab-eq rect:nth-child(3) { animation-delay: .28s; }
+.adbot[data-mood="happy"] .ab-open { opacity: 0; }
+.adbot[data-mood="happy"] .ab-joy { opacity: 1; }
+.adbot[data-mood="happy"] .ab-smile { transform: scale(1.35); }
+.adbot[data-mood="happy"] .ab-float { animation: ab-hop .55s cubic-bezier(.3, 1.5, .5, 1) 2; }
+.adbot[data-mood="sad"] .ab-open { transform: scaleY(.55); animation: none; }
+.adbot[data-mood="sad"] .ab-smile { transform: scaleY(-1) translateY(-2px); }
+.adbot[data-mood="sad"] .ab-face { transform: rotate(6deg) translateY(2px); }
+.ab-waving .ab-arm { animation: ab-wave 1.05s ease-in-out; }
+.ab-waving .ab-face { transform: rotate(5deg); }
+
+@keyframes ab-float { 50% { transform: translateY(-4%); } }
+@keyframes ab-blink { 0%, 92%, 100% { transform: scaleY(1); } 95% { transform: scaleY(.12); } }
+@keyframes ab-scan { 0%, 100% { transform: translateX(-4.5px); } 50% { transform: translateX(4.5px); } }
+@keyframes ab-ring { from { transform: scale(1); opacity: .9; } to { transform: scale(3.4); opacity: 0; } }
+@keyframes ab-bulb { to { transform: scale(1.25); opacity: .75; } }
+@keyframes ab-eq { from { transform: scaleY(.6); } to { transform: scaleY(2.3); } }
+@keyframes ab-hop { 40% { transform: translateY(-14%); } }
+@keyframes ab-wave { 0%, 100% { transform: rotate(0); } 25%, 65% { transform: rotate(-155deg); } 45%, 85% { transform: rotate(-120deg); } }
+
+/* Status "bot sedang bekerja": teks berkilau + bar indeterminate. */
+.ab-status { background: linear-gradient(90deg, var(--muted) 30%, var(--ink) 50%, var(--muted) 70%); background-size: 250% 100%;
+  -webkit-background-clip: text; background-clip: text; color: transparent; animation: ab-shine 1.8s linear infinite; }
+.ab-step { animation: ab-step .32s ease-out; display: inline-block; }
+.ab-bar { position: relative; overflow: hidden; height: 3px; border-radius: 99px; background: var(--track); }
+.ab-bar::after { content: ""; position: absolute; inset: 0; width: 40%; border-radius: inherit;
+  background: linear-gradient(90deg, transparent, var(--accent), var(--yellow)); animation: ab-slide 1.3s cubic-bezier(.6, 0, .4, 1) infinite; }
+@keyframes ab-shine { from { background-position: 100% 0; } to { background-position: -150% 0; } }
+@keyframes ab-step { from { opacity: 0; transform: translateY(5px); } }
+@keyframes ab-slide { from { transform: translateX(-100%); } to { transform: translateX(260%); } }
+
+/* Gelembung ucapan maskot di layar kosong. */
+.ab-speech { position: relative; animation: pop-in .25s ease-out; }
+.ab-speech::before { content: ""; position: absolute; left: -6px; top: 18px; width: 12px; height: 12px; background: inherit;
+  border-left: 1px solid var(--line); border-bottom: 1px solid var(--line); transform: rotate(45deg); }
+.ab-composer { border: 1px solid var(--line-strong); background: var(--card); transition: border-color .15s, box-shadow .15s; }
+.ab-composer:focus-within { border-color: var(--accent); box-shadow: 0 0 0 4px var(--accent-soft); }
+
+.ab-still, .ab-still * { animation: none !important; }
+
+@media (prefers-reduced-motion: reduce) {
+  .adbot, .adbot *, .ab-status, .ab-bar::after, .ab-step { animation: none !important; }
+  .ab-status { color: var(--muted); }
+}

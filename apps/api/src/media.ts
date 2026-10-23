@@ -62,7 +62,7 @@ function ensureDir() {
 }
 
 /** Simpan body upload ke disk sambil dialirkan (tidak ditampung di RAM), cek jenis & ukuran, hitung SHA-256. */
-export async function saveMedia(body: ReadableStream<Uint8Array> | null, opts: { name: string; userId: number; coverFor?: string }): Promise<ChatAttachment> {
+export async function saveMedia(body: ReadableStream<Uint8Array> | null, opts: { name: string; userId: number; coverFor?: string; ttlMs?: number }): Promise<ChatAttachment> {
   if (!body) throw new MediaError("File kosong");
   ensureDir();
   const video = opts.coverFor ? getMedia(opts.coverFor, opts.userId) : null;
@@ -102,7 +102,7 @@ export async function saveMedia(body: ReadableStream<Uint8Array> | null, opts: {
   if (video && t.kind !== "image") { await rm(file, { force: true }); throw new MediaError("Cover video harus berupa foto", 415); }
   const entry: Entry = {
     id, kind: t.kind, mime: t.mime, name: safeName(opts.name, t.mime), size, file, userId: opts.userId,
-    sha256: hash.digest("hex"), token: randomBytes(24).toString("base64url"), expiresAt: Date.now() + TTL_MS,
+    sha256: hash.digest("hex"), token: randomBytes(24).toString("base64url"), expiresAt: Date.now() + (opts.ttlMs ?? TTL_MS),
   };
   store.set(id, entry);
   if (video) {
@@ -121,6 +121,12 @@ export function getMedia(id: string, userId: number) {
   return e && e.userId === userId && e.expiresAt > Date.now() ? e : null;
 }
 export const attachmentOf = (e: Entry) => publicInfo(e);
+
+/** Isi file lampiran milik user (untuk dikirim ke worker render atau diputar di kartu pratinjau); null kalau sudah dihapus. */
+export function readMedia(id: string, userId: number) {
+  const e = getMedia(id, userId);
+  return e?.file ? { entry: e, stream: (range?: { start: number; end: number }) => createReadStream(e.file!, range) } : null;
+}
 
 /** URL publik sementara yang diunduh Meta. Ekstensi di akhir membantu Meta mengenali jenis file. */
 export const publicUrl = (e: Entry) => `${env.APP_URL.replace(/\/$/, "")}/m/${e.token}/${encodeURIComponent(e.name)}`;

@@ -8,7 +8,7 @@ import { api, actionsApi, refreshData, ApiError } from "../lib/api";
 import { setView, getView } from "../lib/view";
 import { accLabel } from "../components/pickers";
 
-export type Part = { type: "text"; text: string } | { type: "widget"; widget: ChatWidget };
+export type Part = { type: "text"; text: string } | { type: "widget"; widget: ChatWidget } | { type: "video"; runId: number };
 /** Lampiran yang sudah terkirim; `preview` object URL lokal untuk ditampilkan di gelembung chat. */
 export type SentFile = ChatAttachment & { preview: string };
 export type Msg = { id: number; role: "user" | "bot"; parts: Part[]; ctx?: string; action?: BotAction; error?: boolean; files?: SentFile[] };
@@ -122,6 +122,7 @@ export async function send(raw: string, accounts: Account[], owner: boolean, fil
         if (e.type === "text") appendText(botId, e.text);
         else if (e.type === "widget") patch(botId, (m) => ({ ...m, parts: [...m.parts, { type: "widget", widget: e.widget }] }));
         else if (e.type === "action_card") push({ role: "bot", parts: [], action: e.action });
+        else if (e.type === "video_card") push({ role: "bot", parts: [{ type: "video", runId: e.runId }] });
         else if (e.type === "view") setView({ ...(e.acc ? { acc: e.acc } : {}), ...(e.preset ? { preset: e.preset } : e.from && e.to ? { preset: "custom", from: e.from, to: e.to } : {}) });
         else if (e.type === "rule_changed") refreshData();
         else if (e.type === "error") patch(botId, (m) => ({ ...m, error: !textOf(m), parts: [...m.parts, { type: "text", text: (textOf(m) ? "\n\n" : "") + e.message }] }));

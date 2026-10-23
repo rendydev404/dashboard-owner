@@ -1,18 +1,32 @@
 import { useEffect, useRef, useState } from "react";
-import { Send, Bot, Zap, Check, Undo2, Square, Maximize2, Minimize2, X, RotateCcw, Sparkles, Paperclip, Film, AlertCircle } from "lucide-react";
+import { Send, Zap, Check, Undo2, Square, Maximize2, Minimize2, X, RotateCcw, Paperclip, Film, AlertCircle, BarChart3, Lightbulb, Flame, Clock3, Trophy, Wallet } from "lucide-react";
 import type { BotAction } from "@iklan/shared";
 import { api, useBootstrap, actionsApi, refreshData, ApiError } from "../lib/api";
 import { setView, useView } from "../lib/view";
 import { actionSummary } from "../lib/campaign-action";
 import { accLabel } from "../components/pickers";
 import { toast, cx } from "../components/ui";
+import { AdBot, type BotMood } from "../components/AdBot";
 import { Markdown } from "./Markdown";
 import { Widget } from "./Widgets";
 import { LaunchPlan } from "./LaunchPlan";
-import { useChat, send, greet, updateAction, resetChat, stopChat, type Msg, type SentFile } from "./store";
+import { VideoCard } from "./VideoCard";
+import { useChat, send, greet, updateAction, resetChat, stopChat, textOf, type Msg, type SentFile } from "./store";
 import { ACCEPT, fmtSize, precheck, uploadMedia, videoCover, type Pending } from "./media";
 
-const CHIPS = ["Ringkasan performa minggu ini", "Rekomendasi kampanye", "Kampanye paling boros?", "Jam paling cuan?", "Produk terlaris bulan ini", "Laba rugi bulan lalu"];
+const CHIPS = [
+  ["Ringkasan performa minggu ini", BarChart3], ["Rekomendasi kampanye", Lightbulb], ["Kampanye paling boros?", Flame],
+  ["Jam paling cuan?", Clock3], ["Produk terlaris bulan ini", Trophy], ["Laba rugi bulan lalu", Wallet],
+] as const;
+// Tahap yang tampil selama bot bekerja. Backend belum mengirim status per tahap, jadi bergilir tiap 2 detik dan berhenti di tahap terakhir.
+const STEPS = ["Membaca data iklan", "Menghitung CPA & ROAS", "Membandingkan kampanye", "Menyusun jawaban"];
+const WIDGET_STEPS = ["Menyiapkan grafik", "Merangkum temuan"];
+const TIPS = [
+  "Coba tanya: “kampanye mana yang paling boros minggu ini?”",
+  "Lampirkan foto/video, nanti gw bikinin draft iklannya.",
+  "Bilang “pindah ke akun lain” atau “30 hari”, dashboard ikut pindah.",
+  "Pause atau scale kampanye juga bisa, tapi gw selalu minta konfirmasi dulu.",
+];
 
 function ActionCard({ action }: { action: BotAction }) {
   const [busy, setBusy] = useState(false);
@@ -81,25 +95,69 @@ function FileThumb({ kind, preview, name, size, progress, error, onRemove }: {
   );
 }
 
-const Typing = () => (
-  <span className="inline-flex items-center gap-1 text-muted" aria-label="Bot sedang mengetik">
-    <span className="size-1.5 animate-bounce rounded-full bg-current" /><span className="size-1.5 animate-bounce rounded-full bg-current [animation-delay:120ms]" /><span className="size-1.5 animate-bounce rounded-full bg-current [animation-delay:240ms]" />
-  </span>
-);
+function Working({ steps, bot }: { steps: string[]; bot?: boolean }) {
+  const [t, setT] = useState(0);
+  useEffect(() => { const id = setInterval(() => setT((x) => x + 1), 1000); return () => clearInterval(id); }, []);
+  const i = Math.min(steps.length - 1, Math.floor(t / 2));
+  return (
+    <div className="flex items-center gap-3" role="status">
+      {bot && <AdBot size={34} head mood="think" />}
+      <div className="w-full max-w-[240px] space-y-2">
+        <p className="text-[12.5px] font-medium leading-none">
+          <span key={i} className="ab-step ab-status">{steps[i]}…</span>
+          {t >= 5 && <span className="num ml-1.5 text-[11px] font-normal text-muted-2">{t} dtk</span>}
+        </p>
+        <div className="ab-bar" />
+      </div>
+    </div>
+  );
+}
+
+/** Layar sambutan: maskot bisa diklik (melambai + tips bergilir), lalu pilihan pertanyaan cepat. */
+function Hero({ page, greeting, ctx, onPick }: { page: boolean; greeting: string; ctx: string; onPick: (q: string) => void }) {
+  const [tip, setTip] = useState(-1);
+  const [wave, setWave] = useState(1);
+  const poke = () => { setTip((t) => (t + 1) % TIPS.length); setWave((w) => w + 1); };
+  return (
+    <div className={cx("flex flex-col items-center", page ? "pt-6" : "pt-2")}>
+      <div className="flex items-start gap-2">
+        <button type="button" onClick={poke} className="shrink-0 rounded-full" title="Klik aku!" aria-label="Sapa bot, tampilkan tips">
+          <AdBot size={page ? 112 : 84} track wave={wave} />
+        </button>
+        <p key={tip} className="ab-speech mt-3 max-w-[310px] rounded-2xl border border-line bg-card px-3.5 py-2.5 text-[13px] leading-relaxed shadow-card">
+          {tip < 0 ? greeting : TIPS[tip]}
+        </p>
+      </div>
+      <h2 className={cx("mt-4 text-center font-semibold tracking-tight", page ? "text-[21px]" : "text-[17px]")}>Mau bahas iklan apa hari ini?</h2>
+      <p className="mt-0.5 text-center text-[12px] text-muted">Membaca data {ctx}</p>
+      <div className={cx("mt-4 grid w-full gap-2", page ? "sm:grid-cols-3" : "grid-cols-2")}>
+        {CHIPS.map(([c, Icon], i) => (
+          <button key={c} onClick={() => onPick(c)} style={{ animationDelay: `${i * 40}ms` }}
+            className="pop-in group flex items-center gap-2.5 rounded-xl border border-line bg-card px-3 py-2.5 text-left text-[12.5px] font-medium transition-[border-color,translate] hover:-translate-y-0.5 hover:border-accent">
+            <span className="grid size-7 shrink-0 place-items-center rounded-lg bg-accent-soft text-accent transition-transform group-hover:scale-110"><Icon size={14} /></span>
+            <span className="leading-snug">{c}</span>
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
 
 function BotMessage({ m, last, busy, page }: { m: Msg; last: boolean; busy: boolean; page: boolean }) {
   const empty = !m.parts.length && !m.action;
+  const widgetPending = last && busy && m.parts[m.parts.length - 1]?.type === "widget";
+  const mood: BotMood = m.error ? "sad" : empty || widgetPending ? "think" : last && busy ? "talk" : "idle";
   return (
-    <div className={cx("flex gap-2.5", page ? "max-w-full" : "max-w-[96%]")}>
-      {page && <span className="mt-0.5 grid size-8 shrink-0 place-items-center rounded-full bg-accent-soft text-accent"><Sparkles size={15} /></span>}
+    <div className={cx("pop-in flex gap-2.5", page ? "max-w-full" : "max-w-[96%]")}>
+      {page && <AdBot size={34} head mood={mood} className={cx("mt-0.5", !last && "ab-still")} />}
       <div className="min-w-0 flex-1 space-y-2">
         {m.ctx && <p className="text-[11px] font-semibold text-muted">{m.ctx}</p>}
-        {m.parts.map((p, i) => p.type === "widget" ? <Widget key={i} w={p.widget} /> : p.text.trim() && (
+        {m.parts.map((p, i) => p.type === "widget" ? <Widget key={i} w={p.widget} /> : p.type === "video" ? <VideoCard key={i} runId={p.runId} /> : p.text.trim() && (
           <div key={i} className={cx("rounded-2xl px-3.5 py-2.5 text-[13.5px] leading-relaxed", m.error ? "bg-red-soft text-red-ink" : page ? "bg-transparent px-0" : "rounded-bl-md bg-bg")}>
             <Markdown text={p.text} />
           </div>
         ))}
-        {(empty || (last && busy && m.parts[m.parts.length - 1]?.type === "widget")) && <div className={cx("rounded-2xl px-3.5 py-3", page ? "px-0" : "bg-bg")}><Typing /></div>}
+        {(empty || widgetPending) && <div className={cx("rounded-2xl py-2.5", page ? "px-0 pt-2" : "w-fit min-w-[230px] rounded-bl-md bg-bg px-3")}><Working bot={!page} steps={empty ? STEPS : WIDGET_STEPS} /></div>}
         {m.action && <ActionCard action={m.action} />}
       </div>
     </div>
@@ -116,6 +174,19 @@ export default function ChatView({ variant, onClose }: { variant: "panel" | "pag
   const ta = useRef<HTMLTextAreaElement>(null);
   const owner = boot.user.role === "owner";
   const fresh = msgs.length <= 1;
+  const tail = msgs[msgs.length - 1];
+  // Ekspresi maskot di header: berpikir → bicara saat teks mengalir → senang/sedih sebentar setelah selesai.
+  const [after, setAfter] = useState<BotMood | null>(null);
+  const wasBusy = useRef(false);
+  useEffect(() => {
+    const ended = wasBusy.current && !busy;
+    wasBusy.current = busy;
+    if (!ended) return;
+    setAfter(tail?.error ? "sad" : "happy");
+    const t = setTimeout(() => setAfter(null), 1800);
+    return () => clearTimeout(t);
+  }, [busy]); // eslint-disable-line react-hooks/exhaustive-deps
+  const mood: BotMood = busy ? (tail?.role === "bot" && textOf(tail) ? "talk" : "think") : after ?? "idle";
 
   useEffect(() => { greet(); setTimeout(() => ta.current?.focus(), 50); }, []);
   useEffect(() => { body.current?.scrollTo({ top: body.current.scrollHeight, behavior: "smooth" }); }, [msgs]);
@@ -164,9 +235,9 @@ export default function ChatView({ variant, onClose }: { variant: "panel" | "pag
     <div className={cx("flex min-h-0 flex-1 flex-col", page && "mx-auto w-full max-w-[860px]")}>
       <div className={cx("flex items-center justify-between gap-3 px-4 py-3", page ? "border-b border-line px-1 pt-0" : "border-b border-line pt-[max(12px,env(safe-area-inset-top))]")}>
         <div className="flex min-w-0 items-center gap-3">
-          <span className="grid size-9 shrink-0 place-items-center rounded-full bg-accent text-accent-ink"><Bot size={18} /></span>
+          <span className="grid size-10 shrink-0 place-items-center rounded-full bg-accent-soft"><AdBot size={34} head mood={mood} /></span>
           <div className="min-w-0 leading-tight">
-            <p className="font-semibold">Bot Iklan</p>
+            <p className="font-semibold">Bot Iklan{busy && <span className="ml-2 text-[11.5px] font-medium text-accent">{mood === "talk" ? "menulis…" : "berpikir…"}</span>}</p>
             <p className="truncate text-[11.5px] text-muted"><span className={cx("mr-1 inline-block size-1.5 rounded-full align-middle", boot.integration.aiConfigured ? "bg-green" : "bg-muted")} />{status} · {accLabel(view.acc, boot.accounts)}</p>
           </div>
         </div>
@@ -180,24 +251,17 @@ export default function ChatView({ variant, onClose }: { variant: "panel" | "pag
       </div>
 
       <div ref={body} className={cx("flex-1 space-y-4 overflow-y-auto py-4", page ? "px-1" : "px-4")} aria-live="polite">
-        {msgs.map((m, i) => m.role === "user"
+        {fresh ? <Hero page={page} greeting={msgs[0] ? textOf(msgs[0]) : ""} ctx={accLabel(view.acc, boot.accounts)} onPick={submit} /> : msgs.map((m, i) => m.role === "user"
           ? <div key={m.id} className="ml-auto flex w-fit max-w-[85%] flex-col items-end gap-1.5">
               {m.files?.length ? <div className="flex flex-wrap justify-end gap-1.5">{m.files.map((f) => <FileThumb key={f.id} {...f} />)}</div> : null}
-              <div className="whitespace-pre-wrap rounded-2xl rounded-br-md bg-accent px-3.5 py-2.5 text-[13.5px] text-accent-ink">{m.parts[0]?.type === "text" ? m.parts[0].text : ""}</div>
+              <div className="pop-in whitespace-pre-wrap rounded-2xl rounded-br-md bg-accent px-3.5 py-2.5 text-[13.5px] text-accent-ink">{m.parts[0]?.type === "text" ? m.parts[0].text : ""}</div>
             </div>
           : <BotMessage key={m.id} m={m} last={i === msgs.length - 1} busy={busy} page={page} />)}
-        {fresh && page && (
-          <div className="grid gap-2 pt-2 sm:grid-cols-2">
-            {CHIPS.map((c) => (
-              <button key={c} onClick={() => submit(c)} className="rounded-xl border border-line bg-card px-3.5 py-3 text-left text-[13px] font-medium hover:border-accent hover:text-accent">{c}</button>
-            ))}
-          </div>
-        )}
       </div>
 
-      {!(fresh && page) && (
+      {!fresh && (
         <div className={cx("flex gap-2 overflow-x-auto pb-2 scrollbar-none", page ? "px-1" : "px-4")}>
-          {CHIPS.map((c) => <button key={c} onClick={() => submit(c)} disabled={busy} className="shrink-0 rounded-full border border-line px-3 py-1.5 text-[12px] font-medium hover:border-accent hover:text-accent disabled:opacity-50">{c}</button>)}
+          {CHIPS.map(([c]) => <button key={c} onClick={() => submit(c)} disabled={busy} className="shrink-0 rounded-full border border-line px-3 py-1.5 text-[12px] font-medium hover:border-accent hover:text-accent disabled:opacity-50">{c}</button>)}
         </div>
       )}
       {pending.length > 0 && (
@@ -209,21 +273,23 @@ export default function ChatView({ variant, onClose }: { variant: "panel" | "pag
           {pending.some((p) => p.error) && <p className="flex w-full items-center gap-1 text-[11.5px] text-red-ink"><AlertCircle size={13} /> Lampiran yang gagal tidak ikut terkirim.</p>}
         </div>
       )}
-      <form className={cx("flex items-end gap-2 border-t border-line py-3", page ? "px-1 pb-4" : "px-4 pb-[max(12px,env(safe-area-inset-bottom))]", pending.length > 0 && "border-t-0")} onSubmit={(e) => { e.preventDefault(); submit(input); }}>
+      <form className={cx("py-3", page ? "px-1 pb-4" : "px-4 pb-[max(12px,env(safe-area-inset-bottom))]")} onSubmit={(e) => { e.preventDefault(); submit(input); }}>
+       <div className="ab-composer flex items-end gap-1 rounded-2xl p-1.5">
         {owner && (
           <>
             <input ref={fileInput} type="file" accept={ACCEPT} multiple hidden onChange={(e) => { addFiles(e.target.files); e.target.value = ""; }} />
-            <button type="button" className="btn size-[42px] shrink-0 p-0" onClick={() => fileInput.current?.click()} disabled={busy || pending.length >= 4}
+            <button type="button" className="btn btn-ghost size-10 min-h-0 shrink-0 rounded-xl p-0 text-muted hover:text-ink" onClick={() => fileInput.current?.click()} disabled={busy || pending.length >= 4}
               title="Lampirkan foto/video untuk iklan (JPG/PNG maks. 30 MB, MP4/MOV maks. 100 MB)" aria-label="Lampirkan foto atau video"><Paperclip size={17} /></button>
           </>
         )}
-        <textarea ref={ta} rows={1} className="input max-h-40 min-h-[42px] resize-none py-2.5 leading-snug" placeholder={ready.length ? "Jelaskan iklannya: akun, tujuan, budget/hari…" : "Tanya apa saja soal iklan & penjualan…  (Shift+Enter untuk baris baru)"}
+        <textarea ref={ta} rows={1} className={cx("max-h-40 min-h-10 flex-1 resize-none bg-transparent py-2.5 leading-snug outline-none placeholder:text-muted-2 focus-visible:outline-none", owner ? "px-1" : "px-2.5")} placeholder={ready.length ? "Jelaskan iklannya: akun, tujuan, budget/hari…" : page ? "Tanya apa saja soal iklan & penjualan…  (Shift+Enter untuk baris baru)" : "Tanya soal iklan & penjualan…"}
           value={input} onChange={(e) => setInput(e.target.value)} maxLength={2000} aria-label="Pesan untuk bot"
           onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) { e.preventDefault(); submit(input); } }} />
         {busy
-          ? <button type="button" onClick={stopChat} className="btn size-[42px] shrink-0 p-0" aria-label="Hentikan jawaban" title="Hentikan"><Square size={15} /></button>
-          : <button className="btn btn-primary size-[42px] shrink-0 p-0" disabled={(!input.trim() && !ready.length) || uploading} aria-label="Kirim"
-              title={uploading ? "Tunggu upload selesai" : undefined}><Send size={17} /></button>}
+          ? <button type="button" onClick={stopChat} className="btn size-10 min-h-0 shrink-0 rounded-xl p-0" aria-label="Hentikan jawaban" title="Hentikan"><Square size={14} className="fill-current" /></button>
+          : <button className="btn btn-primary size-10 min-h-0 shrink-0 rounded-xl p-0 transition-transform active:scale-90" disabled={(!input.trim() && !ready.length) || uploading} aria-label="Kirim"
+              title={uploading ? "Tunggu upload selesai" : undefined}><Send size={16} /></button>}
+       </div>
       </form>
     </div>
   );

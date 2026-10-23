@@ -28,6 +28,9 @@ const schema = z.object({
   STATIC_DIR: z.string().default("public"),
   // Folder sementara foto/video lampiran chat (harus di disk, bukan tmpfs: video bisa 100 MB). Kosong = folder temp OS.
   MEDIA_DIR: z.string().optional(),
+  // Worker render video iklan (apps/creative-worker), di jaringan internal Docker. Kosong = fitur video nonaktif.
+  CREATIVE_WORKER_URL: z.string().url().optional(),
+  CREATIVE_WORKER_TOKEN: z.string().min(24).optional(),
 });
 
 const parsed = schema.safeParse(process.env);
@@ -56,3 +59,4 @@ export type AiMode = "bridge" | "api" | "none";
 export const aiMode = (): AiMode => (env.CLAUDE_BRIDGE_URL && env.CLAUDE_BRIDGE_TOKEN ? "bridge" : env.ANTHROPIC_API_KEY ? "api" : "none");
 export const aiConfigured = () => aiMode() !== "none";
 export const lynkConfigured = () => !!env.LYNK_MERCHANT_KEY;
+export const creativeConfigured = () => !!(env.CREATIVE_WORKER_URL && env.CREATIVE_WORKER_TOKEN);

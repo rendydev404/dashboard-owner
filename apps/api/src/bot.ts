@@ -12,6 +12,7 @@ import { createCampaignAction, createLaunchAction, findCampaigns, logRuleChange,
 import { launchContext } from "./meta/launch";
 import { AD_PRESETS, adBreakdown, diagnose, placementBreakdown } from "./analysis";
 import { uploadAttachment } from "./meta/upload";
+import { createVideoAd } from "./creative";
 import { errMsg, log } from "./log";
 import { summaryWidgets, campaignsWidget, hourlyWidget, productsWidget, plWidget } from "./chat-widgets";
 import { openChatSession, closeChatSession } from "./chat-sessions";
@@ -216,6 +217,49 @@ export const TOOLS: Anthropic.Tool[] = [
       required: ["accountId", "campaignName", "objective", "dailyBudget", "pageId", "creative", "adName"],
     },
   },
+  {
+    name: "create_video_ad",
+    description:
+      "BUAT video iklan 9:16 (suara narasi + subtitle + teks animasi + harga + CTA) dari foto/video lampiran user, SEKALIGUS rencana kampanyenya. " +
+      "Video dirender di server (±2–3 menit) lalu tampil sebagai kartu pratinjau di chat. TIDAK ada yang dikirim ke Meta sampai user menonton " +
+      "dan menekan 'Setujui & iklankan'; setelah itu sistem mengupload video dan membuat + menayangkan kampanye sesuai rencana di sini. " +
+      "Panggil hanya setelah akun, produk, tujuan, dan budget harian jelas, dan setelah get_launch_context (untuk Page, pixel, link, harga produk).",
+    input_schema: {
+      type: "object",
+      properties: {
+        accountId: { type: "string", description: "ID akun yang DIPILIH USER" },
+        hook: { type: "string", description: "Teks besar 0–3 dtk pertama, ≤ 40 karakter, spesifik ke masalah/hasil" },
+        bullets: { type: "array", items: { type: "string" }, description: "0–3 manfaat singkat (≤ 30 karakter) yang tampil bergantian" },
+        priceBadge: { type: "string", description: "Mis. 'Rp49rb'. HARUS sama dengan harga produk dari get_launch_context; kosongkan kalau tidak yakin" },
+        cta: { type: "string", description: "Ajakan di kartu penutup, mis. 'Klik link di bawah'" },
+        ctaSub: { type: "string", description: "Baris kecil di bawah CTA (opsional)" },
+        script: { type: "string", description: "Naskah voice over Bahasa Indonesia santai, 15–30 dtk diucapkan (±40–75 kata): hook → manfaat → bukti → CTA. Tulis angka dengan huruf (\"empat puluh sembilan ribu\")" },
+        mediaIds: { type: "array", items: { type: "string" }, description: "media_id foto/video lampiran user, urut sesuai adegan (1–6)" },
+        logoMediaId: { type: "string", description: "media_id logo PNG kalau user melampirkannya" },
+        brandName: { type: "string" },
+        campaign: {
+          type: "object",
+          description: "Rencana kampanye yang dijalankan saat user menyetujui video (aturan sama dengan propose_launch).",
+          properties: {
+            campaignName: { type: "string" },
+            objective: { type: "string", enum: ["sales", "leads_website", "leads_whatsapp", "traffic"] },
+            dailyBudget: { type: "integer", description: "Rupiah/hari, sesuai yang user sebut" },
+            pageId: { type: "string" }, instagramUserId: { type: "string" }, pixelId: { type: "string" }, linkUrl: { type: "string" },
+            targeting: { type: "object", properties: { countries: { type: "array", items: { type: "string" } }, ageMin: { type: "integer" }, ageMax: { type: "integer" }, genders: { type: "string", enum: ["all", "male", "female"] } } },
+            primaryText: { type: "string", description: "Teks utama iklan di atas video" },
+            headline: { type: "string", description: "≤ 40 karakter" },
+            description: { type: "string" },
+            metaCta: { type: "string", enum: ["SHOP_NOW", "BUY_NOW", "LEARN_MORE", "SIGN_UP", "ORDER_NOW", "GET_OFFER", "CONTACT_US", "APPLY_NOW", "SUBSCRIBE", "WHATSAPP_MESSAGE"] },
+            adName: { type: "string" },
+            startNow: { type: "boolean", description: "true = langsung tayang setelah disetujui (default); false = draft" },
+            rationale: { type: "string" },
+          },
+          required: ["campaignName", "objective", "dailyBudget", "pageId", "primaryText", "headline", "adName"],
+        },
+      },
+      required: ["accountId", "hook", "cta", "script", "mediaIds", "campaign"],
+    },
+  },
 ];
 
 function scopeAndRange(input: any, ctx: ChatContext, cfg: Config) {
@@ -377,6 +421,16 @@ export async function runTool(name: string, input: any, ctx: ChatContext, user: 
       emit({ type: "action_card", action });
       return { ok: true, pendingActionId: action.id, note: "Kartu rencana sudah tampil. Iklan BELUM dibuat. Minta user memeriksa lalu menekan 'Ya, eksekusi'. Jangan bilang iklan sudah tayang." };
     }
+    case "create_video_ad": {
+      if (user.role !== "owner") return { error: "Hanya owner yang boleh membuat iklan" };
+      const { runId } = await createVideoAd(input, user.id);
+      emit({ type: "video_card", runId });
+      return {
+        ok: true, runId,
+        note: "Kartu video sudah tampil dan sedang dirender (±2–3 menit). Video BELUM dikirim ke Meta. Bilang ke user: tonton dulu di kartu, " +
+          "lalu tekan 'Setujui & iklankan' kalau sudah oke (kampanye dibuat & tayang sesuai rencana), atau 'Buang' lalu minta revisi. Jangan bilang iklan sudah tayang.",
+      };
+    }
   }
   return { error: "Tool tidak dikenal" };
 }
@@ -445,6 +499,16 @@ Foto/video dari user (pesan berisi baris "[Lampiran foto|video · media_id=…]"
 - Setelah akun pasti, panggil upload_media_to_meta(media_id, account_id). Foto → creative {type:'new', imageHash}. Video → creative {type:'new', videoId} (thumbnail otomatis). Jangan mengarang hash/ID.
 - Video yang masih diproses Meta boleh langsung dibuatkan kartu rencananya; beri tahu user bahwa tombol "Ya, eksekusi" baru berhasil setelah video siap (1–5 menit).
 - Satu lampiran = satu iklan. Lebih dari satu lampiran: tanyakan mau 1 kampanye dengan iklan terpisah (buat satu per satu) atau pilih satu.
+  Pengecualian: kalau user minta DIBUATKAN VIDEO iklan, semua lampiran boleh jadi adegan dalam satu video (lihat bawah).
+
+Membuat VIDEO iklan (user minta "bikinin video", "buat video iklan", dsb.):
+- Butuh minimal 1 foto/video lampiran sebagai visual (contoh hasil, produk, rekaman layar). Kalau belum ada, minta user melampirkan 1–6 foto/video.
+- Jalankan langkah 1–3 "Membuat iklan baru" (akun, produk/tujuan/budget, get_launch_context). Lalu tulis:
+  hook ≤ 40 karakter, 0–3 bullet ≤ 30 karakter, naskah voice over 15–30 dtk (±40–75 kata, hook → manfaat konkret → bukti → CTA, angka ditulis dengan huruf),
+  CTA kartu penutup, dan copy iklan Meta (primaryText, headline ≤ 40 karakter, metaCta).
+- Harga di video (priceBadge) HANYA dari produk get_launch_context. Tanpa klaim berlebihan/jaminan hasil/penghasilan, tanpa menyebut atribut personal penonton.
+- Panggil create_video_ad sekali (jangan upload_media_to_meta/propose_launch untuk video ini). Tampilkan ringkas naskah & rencananya, lalu minta user menonton
+  video di kartu dan menekan "Setujui & iklankan". Kalau user minta revisi, buat video baru dengan create_video_ad.
 
 Best practice membuat iklan:
 - Struktur sederhana: 1 kampanye CBO, 1 ad set, 1–3 iklan. Hindari memecah budget kecil ke banyak ad set.

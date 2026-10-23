@@ -8,6 +8,7 @@ import { setView, useView, type Tab } from "../lib/view";
 import { api, queryClient } from "../lib/api";
 import { PeriodPicker, QuickFilters, ThemeToggle } from "./pickers";
 import { cx, Modal } from "./ui";
+import { AdBot } from "./AdBot";
 
 /* ------------------------------------------------------------------ chat open state */
 let chatOpen = false;
@@ -49,17 +50,12 @@ function Logo({ collapsed }: { collapsed?: boolean }) {
 }
 
 function BotCard() {
+  const [wave, setWave] = useState(0);
   return (
-    <div className="relative mt-auto overflow-hidden rounded-2xl bg-accent-soft p-4 pt-16">
-      <svg className="absolute left-1/2 top-3 -translate-x-1/2" width="76" height="60" viewBox="0 0 76 60" aria-hidden>
-        <rect x="14" y="10" width="48" height="36" rx="14" fill="var(--accent)" />
-        <circle cx="30" cy="28" r="5" fill="#fff" /><circle cx="46" cy="28" r="5" fill="#fff" />
-        <circle cx="31" cy="29" r="2.2" fill="#1d1f2c" /><circle cx="47" cy="29" r="2.2" fill="#1d1f2c" />
-        <path d="M33 37q5 4 10 0" stroke="#fff" strokeWidth="2.4" fill="none" strokeLinecap="round" />
-        <line x1="38" y1="10" x2="38" y2="3" stroke="var(--accent)" strokeWidth="3" /><circle cx="38" cy="3" r="3" fill="#FFC21A" />
-        <rect x="6" y="22" width="8" height="12" rx="4" fill="var(--accent)" opacity=".6" /><rect x="62" y="22" width="8" height="12" rx="4" fill="var(--accent)" opacity=".6" />
-        <path d="M30 46l-4 10 10-10z" fill="var(--accent)" />
-      </svg>
+    <div className="relative mt-auto overflow-hidden rounded-2xl bg-accent-soft p-4 pt-[86px]">
+      <button type="button" className="absolute left-1/2 top-2 -translate-x-1/2 rounded-full" onClick={() => setWave((w) => w + 1)} onMouseEnter={() => setWave((w) => w + 1)} aria-label="Sapa bot">
+        <AdBot size={80} track wave={wave} />
+      </button>
       <p className="text-center text-[13px] font-semibold leading-snug">Butuh analisis?<br /><span className="font-normal text-muted">Tanya bot soal angka & iklan</span></p>
       <button className="btn btn-primary mx-auto mt-3 flex h-9 min-h-0 rounded-full px-4 text-[12.5px]" onClick={() => setChatOpen(true)}>Tanya bot</button>
     </div>
@@ -229,7 +225,7 @@ export function Shell({ boot, children }: { boot: Bootstrap; children: ReactNode
       </Modal>
 
       {v.tab !== "chat" && <button onClick={() => setChatOpen(true)} className="chat-fab no-print fixed bottom-[76px] right-4 z-30 flex h-12 items-center gap-2 rounded-full bg-accent px-4 font-semibold text-accent-ink shadow-pop md:bottom-6 md:right-6 md:px-5" aria-label="Buka chat bot">
-        <MessageCircle size={19} /> <span className="hidden sm:inline">Tanya bot</span>
+        <span className="-ml-2 grid size-9 place-items-center rounded-full bg-accent-soft sm:-ml-3"><AdBot size={28} head /></span> <span className="hidden sm:inline">Tanya bot</span>
       </button>}
     </div>
   );

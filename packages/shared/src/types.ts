@@ -159,6 +159,20 @@ export type ChatWidget =
 /** Foto/video yang dilampirkan di chat. Filenya sementara di disk server (bukan database) sampai diterima Meta. */
 export interface ChatAttachment { id: string; kind: "image" | "video"; name: string; size: number; mime: string }
 
+/** Video iklan buatan bot (kartu pratinjau di chat). */
+export type CreativeStatus = "queued" | "rendering" | "review" | "approved" | "uploading" | "launching" | "launched" | "failed" | "discarded" | "expired";
+export interface CreativeRun {
+  id: number; status: CreativeStatus; progress: number; note: string | null; error: string | null;
+  accountId: string; accountName: string;
+  brief: { hook: string; bullets: string[]; priceBadge?: string; cta: string; script: string };
+  plan: { campaignName: string; objective: string; dailyBudget: number; startNow: boolean; primaryText: string; headline: string; cta: string; linkUrl?: string };
+  voice: { provider: "elevenlabs" | "none"; speechSec: number } | null;
+  qc: { ok: boolean; checks: { name: string; ok: boolean; detail: string }[] } | null;
+  result: { bytes: number; durationSec: number; width: number; height: number } | null;
+  action: { id: number; status: string; campaignId: string | null; error: string | null } | null;
+  hasVideo: boolean; createdAt: string;
+}
+
 /** Baris yang dibaca bot untuk tiap lampiran (dipakai server & riwayat chat di browser supaya formatnya sama). */
 export const attachmentLine = (a: ChatAttachment) =>
   `[Lampiran ${a.kind === "video" ? "video" : "foto"} · media_id=${a.id} · ${a.name} · ${(a.size / 1048576).toFixed(1).replace(".", ",")} MB]`;
@@ -168,6 +182,7 @@ export type ChatEvent =
   | { type: "widget"; widget: ChatWidget }
   | { type: "view"; acc?: string; preset?: RangePreset; from?: string; to?: string }
   | { type: "action_card"; action: BotAction }
+  | { type: "video_card"; runId: number }
   | { type: "rule_changed"; accountId: string }
   | { type: "error"; message: string }
   | { type: "done" };

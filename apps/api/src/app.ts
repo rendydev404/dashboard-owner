@@ -29,6 +29,7 @@ import { createCampaignAction, confirmAction, cancelAction, revertAction, listAc
 import { handleChat, updateRule } from "./bot";
 import { MEDIA_LIMITS, MediaError, attachmentOf, getMedia, openByToken, removeMedia, saveMedia } from "./media";
 import { mcpHandler } from "./mcp-server";
+import { approveRun, discardRun, getRun, runCover, runVideo } from "./creative";
 import { runSync, lastMetaError, fetchAccountInfo } from "./meta/sync";
 import { subscribe } from "./events";
 import { log, errMsg } from "./log";
@@ -45,7 +46,7 @@ app.use("*", secureHeaders({
 }));
 app.use("/api/*", async (c, next) => { c.header("X-Robots-Tag", "noindex, nofollow"); await next(); });
 // SSE (/api/events, /api/chat) tidak dikompres supaya event langsung terkirim.
-app.use("/api/*", async (c, next) => (c.req.path === "/api/events" || c.req.path === "/api/chat" ? next() : compress()(c, next)));
+app.use("/api/*", async (c, next) => (c.req.path === "/api/events" || c.req.path === "/api/chat" || c.req.path.endsWith("/video") ? next() : compress()(c, next)));
 app.use("/api/*", sameOrigin);
 
 app.onError((err, c) => {
@@ -307,6 +308,38 @@ api.put("/chat/media", owner, mediaLimiter, async (c) => {
 api.delete("/chat/media/:id", owner, async (c) => {
   await removeMedia(c.req.param("id"), c.get("user").id);
   return c.json({ ok: true });
+});
+
+/* ---------------------------------------------------------------- video iklan buatan bot (creative.ts) */
+
+const runId = (c: Context) => {
+  const n = Number(c.req.param("id"));
+  if (!Number.isInteger(n) || n <= 0) throw new HTTPException(400, { message: "ID video tidak valid" });
+  return n;
+};
+api.get("/creative/:id", owner, async (c) => {
+  c.header("Cache-Control", "private, no-store");
+  return c.json(await getRun(runId(c)));
+});
+api.post("/creative/:id/approve", owner, async (c) => c.json(await approveRun(runId(c))));
+api.post("/creative/:id/discard", owner, async (c) => c.json(await discardRun(runId(c))));
+api.get("/creative/:id/cover", owner, async (c) => {
+  const f = await runCover(runId(c));
+  if (!f) return c.body(null, 404);
+  return c.body(Readable.toWeb(f.stream()) as ReadableStream, 200, { "Content-Type": f.entry.mime, "Content-Length": String(f.entry.size), "Cache-Control": "private, max-age=3600" });
+});
+// Diputar di kartu pratinjau. Mendukung Range supaya video bisa di-seek tanpa mengunduh semuanya.
+api.get("/creative/:id/video", owner, async (c) => {
+  const f = await runVideo(runId(c));
+  if (!f) return c.json({ error: "Video sudah tidak tersedia" }, 404);
+  const size = f.entry.size;
+  const base = { "Content-Type": "video/mp4", "Accept-Ranges": "bytes", "Cache-Control": "private, max-age=3600" };
+  const m = /^bytes=(\d*)-(\d*)$/.exec(c.req.header("range") ?? "");
+  if (!m || (m[1] === "" && m[2] === "")) return c.body(Readable.toWeb(f.stream()) as ReadableStream, 200, { ...base, "Content-Length": String(size) });
+  const start = m[1] === "" ? Math.max(0, size - Number(m[2])) : Number(m[1]);
+  const end = m[1] === "" || m[2] === "" ? size - 1 : Math.min(Number(m[2]), size - 1);
+  if (start >= size || start > end) return c.body(null, 416, { "Content-Range": `bytes */${size}` });
+  return c.body(Readable.toWeb(f.stream({ start, end })) as ReadableStream, 206, { ...base, "Content-Range": `bytes ${start}-${end}/${size}`, "Content-Length": String(end - start + 1) });
 });
 
 /* ---------------------------------------------------------------- pengaturan */
