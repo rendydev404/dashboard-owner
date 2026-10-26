@@ -1,7 +1,7 @@
 import { useState, useSyncExternalStore, type ReactNode } from "react";
 import {
-  LayoutGrid, Megaphone, Clock3, Package, Wallet, Bot, Settings, LogOut, Menu, X, MessageCircle, MoreHorizontal,
-  AlertTriangle, Download, Printer, RefreshCw, Plug,
+  LayoutGrid, Megaphone, Clock3, Package, Wallet, Settings, LogOut, Menu, MessageCircle, MoreHorizontal,
+  AlertTriangle, RefreshCw, Plug,
 } from "lucide-react";
 import { fmtRange, type Bootstrap } from "@iklan/shared";
 import { setView, useView, type Tab } from "../lib/view";
@@ -23,10 +23,9 @@ const NAV: { tab: Tab; label: string; icon: typeof LayoutGrid }[] = [
   { tab: "produk", label: "Produk & Jasa", icon: Package },
   { tab: "labarugi", label: "Laba Rugi", icon: Wallet },
   { tab: "chat", label: "Chat AI", icon: MessageCircle },
-  { tab: "bot", label: "Bot AI", icon: Bot },
 ];
 export const TAB_TITLE: Record<Tab, string> = {
-  ringkasan: "Ringkasan", kampanye: "Kampanye", jam: "Per Jam", produk: "Produk & Jasa", labarugi: "Laba Rugi", chat: "Chat AI", bot: "Bot AI", pengaturan: "Pengaturan",
+  ringkasan: "Ringkasan", kampanye: "Kampanye", jam: "Per Jam", produk: "Produk & Jasa", labarugi: "Laba Rugi", chat: "Chat AI", pengaturan: "Pengaturan",
 };
 
 async function logout() {
@@ -154,7 +153,6 @@ export function Shell({ boot, children }: { boot: Bootstrap; children: ReactNode
   const [drawer, setDrawer] = useState(false);
   const [more, setMore] = useState(false);
   const initials = boot.user.name.split(/\s+/).map((s) => s[0]).slice(0, 2).join("").toUpperCase();
-  const exportUrl = `/api/export/campaigns.csv?${new URLSearchParams({ acc: v.acc, from: v.from, to: v.to })}`;
 
   return (
     <div className="min-h-dvh lg:pl-[76px] xl:pl-[240px]">
@@ -175,8 +173,6 @@ export function Shell({ boot, children }: { boot: Bootstrap; children: ReactNode
             <PeriodPicker />
           </div>
           <div className="no-print flex items-center gap-1 md:gap-3">
-            <a href={exportUrl} className="btn btn-ghost hidden size-9 p-0 md:inline-flex" title="Unduh CSV kampanye" aria-label="Unduh CSV"><Download size={17} /></a>
-            <button onClick={() => window.print()} className="btn btn-ghost hidden size-9 p-0 md:inline-flex" title="Unduh PDF (cetak)" aria-label="Cetak / PDF"><Printer size={17} /></button>
             <ThemeToggle />
             <div className="ml-1 hidden items-center gap-2.5 sm:flex">
               <div className="grid size-9 place-items-center rounded-full bg-accent text-[13px] font-semibold text-accent-ink">{initials}</div>
@@ -209,17 +205,16 @@ export function Shell({ boot, children }: { boot: Bootstrap; children: ReactNode
               <Icon size={20} strokeWidth={v.tab === t ? 2.3 : 1.8} />{l}
             </button>
           ))}
-          <button onClick={() => setMore(true)} className={cx("flex h-[58px] flex-col items-center justify-center gap-1 text-[11px]", ["jam", "produk", "bot", "pengaturan"].includes(v.tab) ? "font-semibold text-accent" : "text-muted")}>
+          <button onClick={() => setMore(true)} className={cx("flex h-[58px] flex-col items-center justify-center gap-1 text-[11px]", ["jam", "produk", "pengaturan"].includes(v.tab) ? "font-semibold text-accent" : "text-muted")}>
             <MoreHorizontal size={20} />Lainnya
           </button>
         </div>
       </nav>
       <Modal open={more} onClose={() => setMore(false)} title="Menu lainnya">
         <div className="space-y-1">
-          {([["jam", "Per Jam", Clock3], ["produk", "Produk & Jasa", Package], ["bot", "Bot AI", Bot], ["pengaturan", "Pengaturan", Settings]] as const).map(([t, l, Icon]) => (
+          {([["jam", "Per Jam", Clock3], ["produk", "Produk & Jasa", Package], ["pengaturan", "Pengaturan", Settings]] as const).map(([t, l, Icon]) => (
             <NavItem key={t} tab={t} label={l} icon={Icon} onClick={() => { setView({ tab: t }); setMore(false); }} />
           ))}
-          <a href={exportUrl} className="flex h-10 items-center gap-3 rounded-[10px] px-3 text-[14px] hover:bg-hover"><Download size={18} /> Unduh CSV kampanye</a>
           <NavItem label="Keluar" icon={LogOut} onClick={logout} />
         </div>
       </Modal>
@@ -230,4 +225,3 @@ export function Shell({ boot, children }: { boot: Bootstrap; children: ReactNode
     </div>
   );
 }
-

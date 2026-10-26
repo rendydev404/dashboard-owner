@@ -2,7 +2,7 @@
 import { useSyncExternalStore } from "react";
 import { presetRange, clampRange, isDateKey, PRESETS, type Preset, type RangePreset } from "@iklan/shared";
 
-export const TABS = ["ringkasan", "kampanye", "jam", "produk", "labarugi", "chat", "bot", "pengaturan"] as const;
+export const TABS = ["ringkasan", "kampanye", "jam", "produk", "labarugi", "chat", "pengaturan"] as const;
 export type Tab = (typeof TABS)[number];
 
 export const SUBS = ["all", "fb", "lynk"] as const;

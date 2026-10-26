@@ -14,7 +14,7 @@ export default function ChatPanel() {
   }, [open]);
   if (!open || tab === "chat") return null;
   return (
-    <aside className="pop-in fixed inset-0 z-[55] flex flex-col bg-card md:inset-auto md:bottom-6 md:right-6 md:h-[min(680px,calc(100dvh-48px))] md:w-[440px] md:rounded-2xl md:border md:border-line md:shadow-pop" aria-label="Chat bot iklan">
+    <aside className="pop-in fixed inset-0 z-[55] flex flex-col overflow-hidden bg-card md:inset-auto md:bottom-5 md:right-5 md:h-[min(720px,calc(100dvh-40px))] md:w-[460px] md:rounded-2xl md:border md:border-line md:shadow-pop" aria-label="Chat bot iklan">
       <ChatView variant="panel" onClose={() => setChatOpen(false)} />
     </aside>
   );

@@ -1,6 +1,6 @@
 import { QueryClient, useQuery, keepPreviousData } from "@tanstack/react-query";
 import type {
-  Bootstrap, DashboardResp, CampaignsResp, HourlyResp, ProductsResp, PlResp, ManualResp, BotResp, BotAction, FbResp, LynkResp,
+  Bootstrap, DashboardResp, CampaignsResp, HourlyResp, ProductsResp, PlResp, ManualResp, BotAction, FbResp, LynkResp,
 } from "@iklan/shared";
 import { useView } from "./view";
 
@@ -61,8 +61,6 @@ export const useProducts = () => useRange<ProductsResp>("products");
 export const useFb = (enabled = true) => useRange<FbResp>("fb", { enabled });
 export const useLynk = (enabled = true) => useRange<LynkResp>("lynk", { withAcc: false, enabled });
 export const usePl = () => useRange<PlResp>("pl", { withAcc: false });
-export const useBotLog = () => useRange<BotResp>("bot");
-
 export const useManual = (limit: number) =>
   useQuery({ queryKey: ["manual", limit], queryFn: () => api<ManualResp>(`/manual?limit=${limit}`), placeholderData: keepPreviousData });
 

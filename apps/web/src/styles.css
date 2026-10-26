@@ -133,26 +133,40 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .md strong { font-weight: 650; }
 
 /* Markdown jawaban bot (chat/Markdown.tsx) */
-.md-chat { overflow-wrap: anywhere; }
-.md-chat > * + * { margin-top: 8px; }
-.md-chat h1, .md-chat h2, .md-chat h3, .md-chat h4 { font-weight: 650; line-height: 1.3; margin-top: 14px; }
-.md-chat h1 { font-size: 1.15em; } .md-chat h2 { font-size: 1.08em; } .md-chat h3, .md-chat h4 { font-size: 1em; }
+.md-chat { overflow-wrap: anywhere; font-size: 14px; line-height: 1.65; color: var(--ink); }
+.md-chat > * + * { margin-top: 10px; }
+.md-chat h1, .md-chat h2, .md-chat h3, .md-chat h4 { font-weight: 650; line-height: 1.35; margin-top: 16px; margin-bottom: 4px; color: var(--ink); letter-spacing: -0.01em; }
+.md-chat h1 { font-size: 1.18em; }
+.md-chat h2 { font-size: 1.08em; }
+.md-chat h3, .md-chat h4 { font-size: 1em; }
 .md-chat > :first-child { margin-top: 0; }
-.md-chat strong { font-weight: 650; }
-.md-chat ul, .md-chat ol { padding-left: 20px; }
-.md-chat ul { list-style: disc; } .md-chat ol { list-style: decimal; }
-.md-chat li + li { margin-top: 3px; }
-.md-chat li > ul, .md-chat li > ol { margin-top: 3px; }
-.md-chat a { color: var(--accent); text-decoration: underline; text-underline-offset: 2px; }
-.md-chat code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: .88em; background: var(--hover); border-radius: 5px; padding: 1px 5px; }
-.md-chat pre { background: var(--hover); border-radius: 10px; padding: 10px 12px; overflow-x: auto; }
-.md-chat pre code { background: none; padding: 0; }
-.md-chat blockquote { border-left: 3px solid var(--line-strong); padding-left: 10px; color: var(--muted); }
-.md-chat hr { border: 0; border-top: 1px solid var(--line); margin: 12px 0; }
-.md-chat table { display: block; max-width: 100%; overflow-x: auto; border-collapse: collapse; font-size: .93em; }
-.md-chat th, .md-chat td { border: 1px solid var(--line); padding: 5px 9px; text-align: left; white-space: nowrap; }
-.md-chat th { background: var(--hover); font-weight: 600; }
+.md-chat strong { font-weight: 650; color: var(--ink); }
+.md-chat ul, .md-chat ol { padding-left: 20px; margin-top: 6px; margin-bottom: 6px; }
+.md-chat ul { list-style: disc; }
+.md-chat ol { list-style: decimal; }
+.md-chat li { padding-left: 2px; }
+.md-chat li + li { margin-top: 5px; }
+.md-chat li > ul, .md-chat li > ol { margin-top: 4px; }
+.md-chat li::marker { color: var(--accent); font-weight: 600; }
+.md-chat a { color: var(--accent); font-weight: 500; text-decoration: underline; text-underline-offset: 3px; }
+.md-chat code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: .86em; background: var(--hover); border: 1px solid var(--line); border-radius: 6px; padding: 1.5px 6px; }
+.md-chat pre { background: var(--bg); border: 1px solid var(--line); border-radius: 12px; padding: 12px 14px; overflow-x: auto; }
+.md-chat pre code { background: none; border: 0; padding: 0; }
+.md-chat blockquote { border-left: 3px solid var(--accent); background: var(--accent-soft); border-radius: 0 10px 10px 0; padding: 8px 12px; color: var(--ink); }
+.md-chat hr { border: 0; border-top: 1px solid var(--line); margin: 14px 0; }
+.md-chat table { display: block; width: 100%; max-width: 100%; overflow-x: auto; border-collapse: collapse; font-size: .92em; border-radius: 10px; border: 1px solid var(--line); }
+.md-chat th, .md-chat td { border-bottom: 1px solid var(--line); border-right: 1px solid var(--line); padding: 7px 11px; text-align: left; white-space: nowrap; }
+.md-chat th:last-child, .md-chat td:last-child { border-right: 0; }
+.md-chat tr:last-child td { border-bottom: 0; }
+.md-chat th { background: var(--hover); font-weight: 600; color: var(--muted); font-size: 11.5px; text-transform: uppercase; letter-spacing: 0.03em; }
 .md-chat td { font-variant-numeric: tabular-nums; }
+
+/* Custom scrollbar halus untuk area percakapan */
+.chat-scroll { scrollbar-width: thin; scrollbar-color: var(--line-strong) transparent; }
+.chat-scroll::-webkit-scrollbar { width: 6px; height: 6px; }
+.chat-scroll::-webkit-scrollbar-track { background: transparent; }
+.chat-scroll::-webkit-scrollbar-thumb { background: var(--line-strong); border-radius: 999px; }
+.chat-scroll::-webkit-scrollbar-thumb:hover { background: var(--muted-2); }
 
 @media print {
   aside, nav, header .no-print, .no-print, .chat-fab { display: none !important; }
@@ -203,23 +217,22 @@ button, input, select, textarea { font: inherit; color: inherit; }
 @keyframes ab-hop { 40% { transform: translateY(-14%); } }
 @keyframes ab-wave { 0%, 100% { transform: rotate(0); } 25%, 65% { transform: rotate(-155deg); } 45%, 85% { transform: rotate(-120deg); } }
 
-/* Status "bot sedang bekerja": teks berkilau + bar indeterminate. */
-.ab-status { background: linear-gradient(90deg, var(--muted) 30%, var(--ink) 50%, var(--muted) 70%); background-size: 250% 100%;
-  -webkit-background-clip: text; background-clip: text; color: transparent; animation: ab-shine 1.8s linear infinite; }
+/* Status "bot sedang bekerja": animasi solid tanpa gradient. */
+.ab-status { color: var(--ink); animation: ab-pulse 1.6s ease-in-out infinite; }
 .ab-step { animation: ab-step .32s ease-out; display: inline-block; }
 .ab-bar { position: relative; overflow: hidden; height: 3px; border-radius: 99px; background: var(--track); }
-.ab-bar::after { content: ""; position: absolute; inset: 0; width: 40%; border-radius: inherit;
-  background: linear-gradient(90deg, transparent, var(--accent), var(--yellow)); animation: ab-slide 1.3s cubic-bezier(.6, 0, .4, 1) infinite; }
-@keyframes ab-shine { from { background-position: 100% 0; } to { background-position: -150% 0; } }
+.ab-bar::after { content: ""; position: absolute; inset: 0; width: 38%; border-radius: inherit;
+  background: var(--accent); animation: ab-slide 1.3s cubic-bezier(.6, 0, .4, 1) infinite; }
+@keyframes ab-pulse { 0%, 100% { opacity: 1; } 50% { opacity: .55; } }
 @keyframes ab-step { from { opacity: 0; transform: translateY(5px); } }
-@keyframes ab-slide { from { transform: translateX(-100%); } to { transform: translateX(260%); } }
+@keyframes ab-slide { from { transform: translateX(-100%); } to { transform: translateX(270%); } }
 
 /* Gelembung ucapan maskot di layar kosong. */
 .ab-speech { position: relative; animation: pop-in .25s ease-out; }
 .ab-speech::before { content: ""; position: absolute; left: -6px; top: 18px; width: 12px; height: 12px; background: inherit;
   border-left: 1px solid var(--line); border-bottom: 1px solid var(--line); transform: rotate(45deg); }
-.ab-composer { border: 1px solid var(--line-strong); background: var(--card); transition: border-color .15s, box-shadow .15s; }
-.ab-composer:focus-within { border-color: var(--accent); box-shadow: 0 0 0 4px var(--accent-soft); }
+.ab-composer { border: 1px solid var(--line-strong); background: var(--card); box-shadow: var(--shadow); transition: border-color .15s, box-shadow .15s; }
+.ab-composer:focus-within { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
 
 .ab-still, .ab-still * { animation: none !important; }
 
