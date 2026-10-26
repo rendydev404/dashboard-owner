@@ -9,7 +9,10 @@ import { fetchActiveAdsets, fetchCampaignState, setDailyBudget, setStatus } from
 import { emit } from "./events";
 import { errMsg, log } from "./log";
 import { loadConfig } from "./scope";
-import { assertLaunchMediaReady, executeLaunch, pauseLaunched, validateLaunchPlan, type LaunchPlan, type LaunchResult } from "./meta/launch";
+import {
+  assertAdsMediaReady, assertLaunchMediaReady, executeAddAds, executeLaunch, pauseAddedAds, pauseLaunched,
+  validateAddAdsPlan, validateLaunchPlan, type AddAdsPlan, type LaunchPlan, type LaunchResult,
+} from "./meta/launch";
 import { runSync } from "./meta/sync";
 
 export type CampaignAction = "pause" | "activate" | "scale";
@@ -120,11 +123,23 @@ export async function createCampaignAction(opts: {
 
 /** Usulan peluncuran kampanye baru dari bot. Tidak menyentuh Meta sampai user mengonfirmasi. */
 export async function createLaunchAction(raw: unknown, userId: number, reason?: string): Promise<BotAction> {
-  const { plan, accountName, minDaily, maxDaily } = await validateLaunchPlan(raw);
-  const params = { plan, accountName, limits: { minDaily, maxDaily } };
+  const { plan, accountName, minDaily, maxDaily, audit } = await validateLaunchPlan(raw);
+  const params = { plan, accountName, limits: { minDaily, maxDaily }, audit };
   const [row] = await sql`
     INSERT INTO bot_actions (account_id, action, params, source, status, reason, requested_by, expires_at)
     VALUES (${plan.accountId}, 'launch', ${sql.json(params as any)}, 'chat', 'pending', ${reason ?? plan.rationale ?? null}, ${userId},
+            now() + make_interval(mins => ${LAUNCH_EXPIRE_MIN}))
+    RETURNING id`;
+  return getAction(Number(row.id));
+}
+
+/** Usulan penambahan 1–5 iklan baru ke kampanye / ad set yang sudah ada. Tidak menyentuh Meta sampai dikonfirmasi. */
+export async function createAddAdsAction(raw: unknown, userId: number, reason?: string): Promise<BotAction> {
+  const { plan, accountName, campaignName, adsetId, adsetName, audit } = await validateAddAdsPlan(raw);
+  const params = { plan, accountName, campaignName, adsetId, adsetName, audit };
+  const [row] = await sql`
+    INSERT INTO bot_actions (account_id, campaign_id, action, params, source, status, reason, requested_by, expires_at)
+    VALUES (${plan.accountId}, ${plan.campaignId}, 'add_ads', ${sql.json(params as any)}, 'chat', 'pending', ${reason ?? plan.rationale ?? null}, ${userId},
             now() + make_interval(mins => ${LAUNCH_EXPIRE_MIN}))
     RETURNING id`;
   return getAction(Number(row.id));
@@ -142,6 +157,10 @@ export function describeAction(a: BotAction): string {
   }
   if (a.action === "update_rule") return `Ubah aturan ${p.field} jadi ${p.value}`;
   if (a.action === "launch") return `Luncurkan kampanye ${(a.params as any).plan?.campaignName}`;
+  if (a.action === "add_ads") {
+    const n = ((a.params as any).plan?.ads as unknown[] | undefined)?.length ?? 1;
+    return `Tambah ${n} iklan baru ke ${a.campaignName ?? (a.params as any).campaignName ?? "kampanye"}`;
+  }
   return a.action;
 }
 
@@ -170,6 +189,7 @@ async function apply(campaignId: string, p: Params, target: "after" | "before") 
 export async function confirmAction(id: number): Promise<BotAction> {
   const [pre] = await sql`SELECT action, params FROM bot_actions WHERE id = ${id} AND status = 'pending'`;
   if (pre?.action === "launch") await assertLaunchMediaReady(pre.params.plan);
+  if (pre?.action === "add_ads") await assertAdsMediaReady(pre.params.plan.accountId, pre.params.plan.ads);
   // Klaim atomik: expires_at dikosongkan, jadi konfirmasi kedua (klik dobel) tidak lolos lagi.
   const [claimed] = await sql`
     UPDATE bot_actions SET expires_at = NULL
@@ -180,6 +200,7 @@ export async function confirmAction(id: number): Promise<BotAction> {
     throw new HTTPException(409, { message: cur.status === "expired" ? "Konfirmasi sudah kedaluwarsa, minta ulang ke bot" : "Aksi ini sudah diproses" });
   }
   if (claimed.action === "launch") return confirmLaunch(id, claimed.account_id, claimed.params);
+  if (claimed.action === "add_ads") return confirmAddAds(id, claimed.account_id, claimed.params);
   try {
     const resp = await apply(claimed.campaign_id, claimed.params, "after");
     await sql`UPDATE bot_actions SET status = 'executed', executed_at = now(), meta_response = ${sql.json(resp as any)} WHERE id = ${id}`;
@@ -219,6 +240,23 @@ async function confirmLaunch(id: number, accountId: string, params: { plan: Laun
   return a;
 }
 
+async function confirmAddAds(id: number, accountId: string, params: { plan: AddAdsPlan; adsetId: string; campaignName?: string }): Promise<BotAction> {
+  const res: LaunchResult = await executeAddAds({ ...params.plan, adsetId: params.adsetId, campaignName: params.campaignName ?? params.plan.campaignName });
+  const ok = res.steps.length > 0 && res.steps.every((s) => s.ok);
+  const failed = res.steps.find((s) => !s.ok);
+  await sql`
+    UPDATE bot_actions SET status = ${ok ? "executed" : "failed"}::action_status, executed_at = ${ok ? new Date() : null},
+      params = params || ${sql.json({ result: res } as any)}, meta_response = ${sql.json(res as any)},
+      error = ${failed ? `Gagal di langkah ${failed.step}: ${failed.note ?? "error dari Meta"}. Iklan baru yang sempat dibuat tetap draft/jeda (tanpa biaya).` : null}
+    WHERE id = ${id}`;
+  log[ok ? "info" : "error"]("injeksi iklan baru", { id, ok, campaign: res.campaignId, adset: res.adsetId, count: res.adIds?.length ?? 0, published: res.published, failedStep: failed?.step });
+  if (res.published) void runSync("manual", accountId).catch(() => {});
+  await bumpDataVersion();
+  const a = await getAction(id);
+  emit({ type: "action", id, status: a.status });
+  return a;
+}
+
 export async function cancelAction(id: number): Promise<BotAction> {
   await sql`UPDATE bot_actions SET status = 'cancelled', expires_at = NULL WHERE id = ${id} AND status = 'pending'`;
   return getAction(id);
@@ -226,7 +264,7 @@ export async function cancelAction(id: number): Promise<BotAction> {
 
 export async function revertAction(id: number): Promise<BotAction> {
   const [r] = await sql`
-    UPDATE bot_actions SET status = 'reverted' WHERE id = ${id} AND status = 'executed' AND action IN ('pause','activate','scale','launch')
+    UPDATE bot_actions SET status = 'reverted' WHERE id = ${id} AND status = 'executed' AND action IN ('pause','activate','scale','launch','add_ads')
     RETURNING account_id, campaign_id, action, params`;
   if (!r) throw new HTTPException(409, { message: "Hanya aksi yang sudah dieksekusi yang bisa dibatalkan" });
   try {
@@ -234,6 +272,9 @@ export async function revertAction(id: number): Promise<BotAction> {
       // Membatalkan peluncuran = menjeda kampanye baru (tidak menghapus data/riwayat di Meta).
       await pauseLaunched(r.account_id, r.campaign_id);
       await sql`UPDATE campaigns SET status = 'PAUSED', effective_status = 'PAUSED', updated_at = now() WHERE id = ${r.campaign_id}`;
+    } else if (r.action === "add_ads") {
+      const adIds: string[] = r.params?.result?.adIds ?? (r.params?.result?.adId ? [r.params.result.adId] : []);
+      if (adIds.length) await pauseAddedAds(r.account_id, adIds);
     } else await apply(r.campaign_id, r.params, "before");
   } catch (e) {
     await sql`UPDATE bot_actions SET status = 'executed', error = ${"Gagal membatalkan: " + errMsg(e)} WHERE id = ${id}`;

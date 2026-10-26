@@ -16,9 +16,10 @@ vi.mock("../src/meta/mcp", () => ({
         return { campaign_id: "c1", status: "DRAFT", valid_optimization_goals: valid, recommended_optimization_goal: valid[0] };
       }
       case "ads_create_ad_set": return { ad_set_id: "s1", status: "DRAFT" };
-      case "ads_create_creative": return { creative_id: "k1" };
-      case "ads_create_ad": return { ad_id: "a1", status: "DRAFT" };
+      case "ads_create_creative": return { creative_id: `k${calls.filter((x) => x.tool === "ads_create_creative").length}` };
+      case "ads_create_ad": return { ad_id: `a${calls.filter((x) => x.tool === "ads_create_ad").length}`, status: "DRAFT" };
       case "ads_activate_entity": return { status: "ACTIVE" };
+      case "ads_update_entity": return { status: "PAUSED" };
       case "ads_get_ad_videos": return { ad_videos: [{ id: "4476160626027557", picture: "https://fbcdn/t160.jpg", status: { video_status: videoState } }] };
     }
     return {};
@@ -133,5 +134,109 @@ describe("iklan video dari lampiran chat", () => {
     videoState = "ready";
     await expect(assertLaunchMediaReady(video())).resolves.toBeUndefined();
     await expect(assertLaunchMediaReady(video({ imageHash: "cover-hash" }))).resolves.toBeUndefined();
+  });
+});
+
+describe("multi-iklan CBO, injeksi kampanye eksisting, UTM, & pre-flight audit", () => {
+  beforeEach(() => { calls.length = 0; failAt = null; videoState = "ready"; });
+
+  it("multi-variasi (ads 3 angle) digabung dalam 1 kampanye CBO + 1 ad set dengan autoUtm per iklan", async () => {
+    const multiPlan = launchPlanSchema.parse({
+      accountId: "1392053332395676",
+      campaignName: "Penjualan - Prompt AI - 26 Okt",
+      objective: "sales",
+      dailyBudget: 200000,
+      pageId: "111",
+      pixelId: "222",
+      linkUrl: "https://lynk.id/x/prompt-ai",
+      autoUtm: true,
+      ads: [
+        { adName: "Poster V1 - Angle Waktu", creative: { type: "new", imageHash: "h1", primaryText: "Potong waktu riset konten dari 3 jam jadi 10 menit pakai paket prompt siap pakai.", headline: "Paket Prompt AI Instan", cta: "SHOP_NOW" } },
+        { adName: "Poster V1 - Angle Hasil", creative: { type: "new", imageHash: "h1", primaryText: "Lebih dari 500 kreator sudah merapikan alur produksi konten harian tanpa ribet.", headline: "Akses Otomatis Rp49rb", cta: "SHOP_NOW" } },
+        { adName: "Kreatif Lama Juara", creative: { type: "existing", creativeId: "777" } },
+      ],
+    });
+    const r = await executeLaunch(multiPlan);
+    expect(r.published).toBe(true);
+    expect(r.creativeIds).toEqual(["k1", "k2", "777"]);
+    expect(r.adIds).toEqual(["a1", "a2", "a3"]);
+    // Hanya 1 kampanye & 1 ad set dibuat, lalu 2 kreatif baru + 3 iklan + 1 aktivasi kampanye
+    expect(calls.map((c) => c.tool)).toEqual([
+      "ads_create_campaign", "ads_create_ad_set",
+      "ads_create_creative", "ads_create_ad",
+      "ads_create_creative", "ads_create_ad",
+      "ads_create_ad",
+      "ads_activate_entity",
+    ]);
+    const cr1Link = calls[2].args.link_url as string;
+    const cr2Link = calls[4].args.link_url as string;
+    expect(cr1Link).toContain("utm_source=meta");
+    expect(cr1Link).toContain("utm_content=poster-v1-angle-waktu");
+    expect(cr2Link).toContain("utm_content=poster-v1-angle-hasil");
+  });
+
+  it("executeAddAds menyuntikkan iklan baru ke ad set eksisting & pauseAddedAds menjedanya saat revert", async () => {
+    const { addAdsPlanSchema, executeAddAds, pauseAddedAds } = await import("../src/meta/launch");
+    const addPlan = addAdsPlanSchema.parse({
+      accountId: "1392053332395676",
+      campaignId: "9001",
+      campaignName: "Kampanye Pemenang",
+      objective: "sales",
+      pageId: "111",
+      linkUrl: "https://lynk.id/x/timelapse",
+      autoUtm: true,
+      ads: [
+        { adName: "Refresh Hook A", creative: { type: "new", imageHash: "h-new-1", primaryText: "Bikin video timelapse properti realistis hanya dari 1 foto ruangan dalam hitungan menit.", headline: "Template Timelapse AI", cta: "SHOP_NOW" } },
+        { adName: "Refresh Hook B", creative: { type: "new", imageHash: "h-new-2", primaryText: "Tanpa software 3D berat, langsung akses panduan langkah demi langkah setelah checkout.", headline: "Akses Instan Tutorial AI", cta: "SHOP_NOW" } },
+      ],
+    });
+    const res = await executeAddAds({ ...addPlan, adsetId: "8001" });
+    expect(res).toMatchObject({ campaignId: "9001", adsetId: "8001", adIds: ["a1", "a2"], published: true });
+    expect(calls.filter((c) => c.tool === "ads_activate_entity").map((c) => c.args.entity_id)).toEqual(["a1", "a2"]);
+
+    calls.length = 0;
+    await pauseAddedAds("1392053332395676", res.adIds!);
+    expect(calls.map((c) => ({ tool: c.tool, id: c.args.entity_id }))).toEqual([
+      { tool: "ads_update_entity", id: "a1" },
+      { tool: "ads_update_entity", id: "a2" },
+    ]);
+  });
+
+  it("auditLaunchPlan mendeteksi pelanggaran kebijakan Meta, headline > 40 karakter, & rasio budget vs CPA", async () => {
+    const { auditLaunchPlan } = await import("../src/meta/launch");
+    const risky = auditLaunchPlan(
+      {
+        objective: "sales",
+        dailyBudget: 20000,
+        linkUrl: "https://lynk.id/x/produk",
+        ads: [{
+          adName: "Iklan Rawan",
+          creative: {
+            type: "new",
+            imageHash: "h1",
+            primaryText: "Buat kamu yang masih boncos terus setiap hari, pakai cara ini dijamin cuan setiap minggu!",
+            headline: "Headline Ini Sangat Panjang Sekali Sampai Pasti Terpotong Di Layar HP",
+            cta: "SHOP_NOW",
+          },
+        }],
+      },
+      { targetCpa: 50000, line: "digital" },
+    );
+    const warns = risky.filter((x) => x.level === "warn").map((x) => x.check);
+    expect(warns).toEqual(expect.arrayContaining(["Kebijakan Meta Ads", "Panjang Headline", "Rasio Budget vs CPA"]));
+
+    const clean = auditLaunchPlan(
+      {
+        objective: "sales",
+        dailyBudget: 120000,
+        linkUrl: "https://lynk.id/x/produk",
+        ads: [
+          { adName: "Angle 1", creative: { type: "new", imageHash: "h1", primaryText: "Pangkas waktu pembuatan desain katalog produk dari 2 jam menjadi 5 menit saja.", headline: "Akses Instan Paket AI", cta: "SHOP_NOW" } },
+          { adName: "Angle 2", creative: { type: "new", imageHash: "h1", primaryText: "Sudah termasuk 120 template siap pakai dan panduan video singkat bahasa Indonesia.", headline: "Siap Pakai Tanpa Ribet", cta: "SHOP_NOW" } },
+        ],
+      },
+      { targetCpa: 50000, line: "digital" },
+    );
+    expect(clean.every((x) => x.level === "ok")).toBe(true);
   });
 });

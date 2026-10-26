@@ -2,7 +2,7 @@
 // bisa mengunduhnya (ads_creative_upload_media sumber URL), lalu dihapus begitu Meta menerimanya atau setelah 2 jam.
 // Daftar lampiran hanya di memori: restart server = semua file sementara dibuang.
 import { createReadStream, createWriteStream, mkdirSync, readdirSync, rmSync } from "node:fs";
-import { rm } from "node:fs/promises";
+import { readFile, rm } from "node:fs/promises";
 import { createHash, randomBytes } from "node:crypto";
 import { tmpdir } from "node:os";
 import path from "node:path";
@@ -126,6 +126,45 @@ export const attachmentOf = (e: Entry) => publicInfo(e);
 export function readMedia(id: string, userId: number) {
   const e = getMedia(id, userId);
   return e?.file ? { entry: e, stream: (range?: { start: number; end: number }) => createReadStream(e.file!, range) } : null;
+}
+
+const VISION_RAW_MAX = Math.floor(3.7 * 1024 * 1024); // ≤ 5 MB setelah base64 (batas blok gambar Claude)
+
+/** Ambil pratinjau visual (foto asli atau cover frame video) dalam base64 untuk diinspeksi AI vision. */
+export async function readMediaVision(id: string, userId: number): Promise<{
+  info: ChatAttachment;
+  source: "image" | "video_cover" | "none";
+  mimeType?: "image/jpeg" | "image/png";
+  data?: string;
+  note?: string;
+} | null> {
+  const e = getMedia(id, userId);
+  if (!e) return null;
+  const info = publicInfo(e);
+  const target = e.kind === "image" ? e : (e.coverId ? getMedia(e.coverId, userId) : null);
+  if (!target?.file) {
+    return {
+      info,
+      source: "none",
+      note: e.kind === "video"
+        ? "Cover frame video belum tersedia atau file sementara sudah dihapus setelah upload ke Meta."
+        : "File sementara sudah dihapus setelah diupload ke Meta; panggil inspect_media SEBELUM upload_media_to_meta.",
+    };
+  }
+  if (target.size > VISION_RAW_MAX) {
+    return {
+      info,
+      source: "none",
+      note: `Ukuran gambar ${(target.size / 1048576).toFixed(1)} MB melebihi batas pratinjau vision (3,7 MB), tetapi tetap siap diupload ke Meta.`,
+    };
+  }
+  const buf = await readFile(target.file);
+  return {
+    info,
+    source: e.kind === "image" ? "image" : "video_cover",
+    mimeType: target.mime === "image/png" ? "image/png" : "image/jpeg",
+    data: buf.toString("base64"),
+  };
 }
 
 /** URL publik sementara yang diunduh Meta. Ekstensi di akhir membantu Meta mengenali jenis file. */

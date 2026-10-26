@@ -30,7 +30,15 @@ export async function mcpHandler(c: Context) {
         let out: unknown;
         try { out = await runTool(name, m.params?.arguments ?? {}, session.ctx, session.user, session.emit); }
         catch (e) { log.error("tool chat gagal", { tool: name, error: errMsg(e) }); out = { error: errMsg(e) }; }
-        return ok({ content: [{ type: "text", text: JSON.stringify(out) }], isError: !!(out as any)?.error });
+        const imgs = Array.isArray((out as any)?.__images) ? ((out as any).__images as { mimeType: string; data: string }[]) : [];
+        const clean = imgs.length && out && typeof out === "object" ? Object.fromEntries(Object.entries(out as Record<string, unknown>).filter(([k]) => k !== "__images")) : out;
+        return ok({
+          content: [
+            ...imgs.map((img) => ({ type: "image", data: img.data, mimeType: img.mimeType })),
+            { type: "text", text: JSON.stringify(clean) },
+          ],
+          isError: !!(clean as any)?.error,
+        });
       }
       default:
         return { jsonrpc: "2.0", id: m.id, error: { code: -32601, message: `Metode tidak dikenal: ${m.method}` } };

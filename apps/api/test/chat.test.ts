@@ -4,6 +4,7 @@ import type { ChatEvent, Kpis } from "@iklan/shared";
 import { summaryWidgets, campaignsWidget } from "../src/chat-widgets";
 import { mcpHandler } from "../src/mcp-server";
 import { openChatSession, closeChatSession } from "../src/chat-sessions";
+import { saveMedia, removeMedia } from "../src/media";
 
 const k = (o: Partial<Kpis>): Kpis => ({
   days: 7, spend: 0, impr: 0, clicks: 0, leads: 0, results: 0, metaRev: 0, revenue: 0, orders: 0, jasaOrders: 0, fee: 0, cogs: 0, gross: 0,
@@ -52,8 +53,21 @@ describe("server MCP internal", () => {
     expect((await (await rpc({ jsonrpc: "2.0", id: 2, method: "server/discover" }, t)).json()).result).toEqual({});
     const list = await (await rpc({ jsonrpc: "2.0", id: 3, method: "tools/list" }, t)).json();
     const names = list.result.tools.map((x: any) => x.name);
-    expect(names).toEqual(expect.arrayContaining(["get_summary", "get_campaigns", "propose_campaign_action"]));
+    expect(names).toEqual(expect.arrayContaining(["get_summary", "get_campaigns", "propose_campaign_action", "inspect_media", "propose_launch", "propose_add_ads"]));
     expect(list.result.tools[0].inputSchema.type).toBe("object");
+
+    // Uji tools/call inspect_media: mengembalikan blok multimodal image + teks bersih tanpa membocorkan __images
+    const jpeg = Buffer.concat([Buffer.from([0xff, 0xd8, 0xff, 0xe0]), Buffer.alloc(512, 9)]);
+    const stream = new ReadableStream<Uint8Array>({ start(c) { c.enqueue(new Uint8Array(jpeg)); c.close(); } });
+    const att = await saveMedia(stream, { name: "poster-iklan.jpg", userId: 1 });
+    const callRes = await (await rpc({ jsonrpc: "2.0", id: 31, method: "tools/call", params: { name: "inspect_media", arguments: { media_ids: [att.id] } } }, t)).json();
+    expect(callRes.result.isError).toBe(false);
+    expect(callRes.result.content[0]).toMatchObject({ type: "image", mimeType: "image/jpeg", data: jpeg.toString("base64") });
+    expect(callRes.result.content[1].type).toBe("text");
+    expect(callRes.result.content[1].text).not.toContain("__images");
+    expect(JSON.parse(callRes.result.content[1].text).inspected[0]).toMatchObject({ media_id: att.id, visionSource: "image" });
+    await removeMedia(att.id, 1);
+
     expect((await rpc({ jsonrpc: "2.0", method: "notifications/initialized" }, t)).status).toBe(202);
     closeChatSession(t);
     expect((await rpc({ jsonrpc: "2.0", id: 4, method: "tools/list" }, t)).status).toBe(401);

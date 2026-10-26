@@ -64,7 +64,8 @@ export async function send(raw: string, accounts: Account[], owner: boolean, fil
       try {
         const a = it.confirm === "yes" ? await actionsApi.confirm(pa.id) : await actionsApi.cancel(pa.id);
         updateAction(a);
-        botText(a.status === "executed" ? `Beres, **${a.campaignName}** sudah dieksekusi.` : a.status === "failed" ? `Gagal: ${a.error}` : "Oke, dibatalkan.");
+        const targetLabel = a.campaignName ?? (a.params as any)?.campaignName ?? (a.params as any)?.plan?.campaignName ?? "aksi";
+        botText(a.status === "executed" ? `Beres, **${targetLabel}** sudah dieksekusi.` : a.status === "failed" ? `Gagal: ${a.error}` : "Oke, dibatalkan.");
         refreshData();
       } catch (e) { botText((e as Error).message, { error: true }); }
       return;

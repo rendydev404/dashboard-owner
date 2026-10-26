@@ -18,7 +18,17 @@ export function actionSummary(a: BotAction) {
   if (a.action === "update_rule") return { title: "Ubah aturan", verb: "Ubah", detail: `${p.field}: ${p.previous ?? "—"} → ${p.value}` };
   if (a.action === "launch") {
     const plan = p.plan ?? {};
-    return { title: "Luncurkan kampanye baru?", verb: "Luncurkan", detail: `${plan.campaignName} · ${rp(plan.dailyBudget ?? 0)}/hari · ${LAUNCH_GOAL[plan.objective] ?? plan.objective}` };
+    const count = Array.isArray(plan.ads) && plan.ads.length > 1 ? ` · ${plan.ads.length} variasi iklan` : "";
+    return { title: "Luncurkan kampanye baru?", verb: "Luncurkan", detail: `${plan.campaignName} · ${rp(plan.dailyBudget ?? 0)}/hari · ${LAUNCH_GOAL[plan.objective] ?? plan.objective}${count}` };
+  }
+  if (a.action === "add_ads") {
+    const plan = p.plan ?? {};
+    const n = Array.isArray(plan.ads) ? plan.ads.length : 1;
+    return {
+      title: `Tambah ${n} iklan baru ke kampanye?`,
+      verb: "Tambahkan",
+      detail: `${a.campaignName ?? p.campaignName ?? plan.campaignId} · Ad set: ${p.adsetName ?? p.adsetId ?? "utama"} · ${n} variasi iklan`,
+    };
   }
   return { title: a.action, verb: a.action, detail: "" };
 }

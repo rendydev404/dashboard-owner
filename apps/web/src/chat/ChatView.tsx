@@ -96,8 +96,8 @@ function ActionCard({ action }: { action: BotAction }) {
         </span>
       </div>
       <div className="p-4">
-        <p className="text-[14px] font-semibold text-ink">{action.campaignName ?? (p.plan?.campaignName as string | undefined)}</p>
-        {action.action === "launch" ? <LaunchPlan action={action} /> : (
+        <p className="text-[14px] font-semibold text-ink">{action.campaignName ?? (p.campaignName as string | undefined) ?? (p.plan?.campaignName as string | undefined)}</p>
+        {(action.action === "launch" || action.action === "add_ads") ? <LaunchPlan action={action} /> : (
           <>
             <p className="mt-0.5 text-[12px] text-muted">{action.accountName}</p>
             <p className="mt-2.5 whitespace-pre-line rounded-xl border border-line bg-bg px-3 py-2 text-[12.5px] leading-relaxed">{s.detail}</p>
@@ -107,7 +107,7 @@ function ActionCard({ action }: { action: BotAction }) {
         {action.status === "pending" && !expired ? (
           <div className="mt-3.5 flex gap-2">
             <button className="btn btn-primary h-9 min-h-0 flex-1 rounded-xl" disabled={busy} onClick={() => run("confirm")}>
-              <Check size={15} /> {busy && action.action === "launch" ? "Membuat iklan…" : "Ya, eksekusi sekarang"}
+              <Check size={15} /> {busy && (action.action === "launch" || action.action === "add_ads") ? "Membuat iklan…" : "Ya, eksekusi sekarang"}
             </button>
             <button className="btn h-9 min-h-0 rounded-xl px-4" disabled={busy} onClick={() => run("cancel")}>Batal</button>
           </div>
@@ -119,7 +119,7 @@ function ActionCard({ action }: { action: BotAction }) {
             </span>
             {action.status === "executed" && !p.demo && (
               <button className="inline-flex items-center gap-1 font-semibold text-accent hover:underline" disabled={busy} onClick={() => run("revert")}>
-                <Undo2 size={13} /> {action.action === "launch" ? "Pause kampanye ini" : "Batalkan aksi"}
+                <Undo2 size={13} /> {action.action === "launch" ? "Pause kampanye ini" : action.action === "add_ads" ? "Pause iklan baru ini" : "Batalkan aksi"}
               </button>
             )}
           </div>

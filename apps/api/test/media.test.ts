@@ -121,4 +121,18 @@ describe("upload ke Meta", () => {
     expect(parseVideoStatus({ status: { video_status: "processing", processing_progress: 40 } })).toEqual({ status: "processing", progress: 40 });
     expect(parseVideoStatus({ status: "error" }).status).toBe("error");
   });
+
+  it("readMediaVision mengembalikan base64 untuk foto maupun cover video sebelum dihapus", async () => {
+    const img = await M.saveMedia(streamOf(JPEG), { name: "poster.jpg", userId: user });
+    const visImg = await M.readMediaVision(img.id, user);
+    expect(visImg).toMatchObject({ source: "image", mimeType: "image/jpeg", data: JPEG.toString("base64") });
+
+    const vid = await M.saveMedia(streamOf(MP4), { name: "demo.mp4", userId: user });
+    const cov = await M.saveMedia(streamOf(JPEG), { name: "demo-cover.jpg", userId: user, coverFor: vid.id });
+    const visVid = await M.readMediaVision(vid.id, user);
+    expect(visVid).toMatchObject({ source: "video_cover", mimeType: "image/jpeg", data: JPEG.toString("base64") });
+    await M.removeMedia(img.id, user);
+    await M.removeMedia(vid.id, user);
+    expect(files()).not.toContain(cov.id);
+  });
 });
