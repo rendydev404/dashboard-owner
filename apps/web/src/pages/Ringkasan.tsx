@@ -13,7 +13,7 @@ function kpiList(d: DashboardResp) {
   return [
     { label: "Laba bersih", value: rpk(k.net), sub: `margin bersih ${pct(k.netMargin)}`, cur: k.net, prev: p.net, goodUp: true, highlight: true, tone: k.net >= 0 ? "pos" : "neg", icon: <Wallet size={ic} /> },
     { label: "Omzet riil", value: rpk(k.revenue), sub: `${nf(k.orders)} ${onlyJasa ? "closing" : "order"}`, cur: k.revenue, prev: p.revenue, goodUp: true, icon: <Receipt size={ic} /> },
-    { label: "Spend iklan", value: rpk(k.spend), sub: `+ PPN ${rpk(k.adTax)}`, cur: k.spend, prev: p.spend, goodUp: null, icon: <Megaphone size={ic} /> },
+    { label: "Spend iklan", value: rpk(k.spend), sub: `+ PPN ${k.spend ? Math.round((k.adTax / k.spend) * 100) : 3}% (${rpk(k.adTax)})`, cur: k.spend, prev: p.spend, goodUp: null, icon: <Megaphone size={ic} /> },
     { label: "ROAS riil", value: `${dec(k.roas)}x`, sub: `impas di ${dec(k.beRoas)}x`, cur: k.roas, prev: p.roas, goodUp: true, tone: k.spend ? (k.roas >= k.beRoas ? "pos" : "neg") : undefined, icon: <Target size={ic} /> },
     hasLeads
       ? { label: "Leads", value: nf(k.leads), sub: `closing rate ${pct(k.closeRate)}`, cur: k.leads, prev: p.leads, goodUp: true, icon: <Users size={ic} /> }

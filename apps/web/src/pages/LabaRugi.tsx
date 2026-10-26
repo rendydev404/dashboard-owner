@@ -9,14 +9,14 @@ import { Card, CardHead, ErrorState, Skeleton, Delta, EmptyState, toast, confirm
 type Row = [label: string, key: keyof Kpis, kind?: "neg" | "group" | "total", fmt?: (v: number) => string];
 const ROWS: Row[] = [
   ["Penjualan", "revenue"], ["Fee platform / PPN lynk", "fee", "neg"], ["HPP / biaya pengerjaan", "cogs", "neg"], ["Laba kotor", "gross", "group"],
-  ["Spend iklan", "spend", "neg"], ["PPN iklan", "adTax", "neg"], ["Biaya operasional (prorata)", "fixed", "neg"], ["Biaya lain (input manual)", "other", "neg"],
+  ["Spend iklan", "spend", "neg"], ["PPN iklan (3%)", "adTax", "neg"], ["Biaya operasional (prorata)", "fixed", "neg"], ["Biaya lain (input manual)", "other", "neg"],
   ["Laba bersih", "net", "total"], ["Margin bersih", "netMargin", undefined, (v) => pct(v)], ["ROAS riil", "roas", undefined, (v) => dec(v) + "x"], ["Order / closing", "orders", undefined, nf],
 ];
 
 function LabaCard({ col }: { col: PlColumn }) {
   const k = col.kpis, total = col.key === "total";
   return (
-    <div className={cx("card p-5", total && "border-accent/40 bg-[linear-gradient(180deg,var(--accent-soft),var(--card)_75%)]")}>
+    <div className={cx("card p-5", total && "border-accent/40 bg-accent-soft/40")}>
       <div className="flex items-start justify-between gap-2">
         <div><p className="text-[13px] font-medium">Laba {col.label}</p><p className="text-[12px] text-muted">{col.src}</p></div>
         <span className="grid size-8 place-items-center rounded-lg border border-line"><Wallet size={16} /></span>

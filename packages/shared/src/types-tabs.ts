@@ -3,14 +3,20 @@ import type { Line } from "./metrics";
 import type { CampaignRow } from "./types";
 
 export interface FbKpis {
-  spend: number; impressions: number; clicks: number; ctr: number; cpc: number; cpm: number;
+  spend: number; adTax: number; totalSpend: number;
+  impressions: number; clicks: number; ctr: number; cpc: number; cpm: number;
   purchases: number; purchaseValue: number; roas: number; cpa: number; leads: number; cpl: number;
 }
 export interface FbPoint { label: string; spend: number; impressions: number; clicks: number; purchases: number; purchaseValue: number; leads: number }
-export interface FbAccountRow { id: string; name: string; line: Line; spend: number; impressions: number; clicks: number; purchases: number; purchaseValue: number; leads: number; roas: number }
+export interface FbAccountRow {
+  id: string; name: string; line: Line;
+  spend: number; adTax: number; adTaxPct: number;
+  impressions: number; clicks: number; purchases: number; purchaseValue: number; leads: number; roas: number;
+}
 export interface FbResp {
   range: { from: string; to: string; prevFrom: string; prevTo: string; days: number };
   kpis: FbKpis; prev: FbKpis;
+  adTaxPct: number;
   series: { granularity: "day" | "hour"; points: FbPoint[] };
   accounts: FbAccountRow[];
   campaigns: CampaignRow[];

@@ -1,5 +1,5 @@
 import { useCallback } from "react";
-import { Megaphone, Eye, MousePointerClick, Percent, Coins, ShoppingCart, BadgeDollarSign, Target, Users, Gauge, Info } from "lucide-react";
+import { Megaphone, Receipt, Eye, MousePointerClick, Percent, Coins, ShoppingCart, BadgeDollarSign, Target, Users, Gauge, Info } from "lucide-react";
 import { rp, rpk, dec, pct, nf, LINES, type FbResp, type FbKpis } from "@iklan/shared";
 import { useFb } from "../lib/api";
 import { Card, CardHead, EmptyState, ErrorState, Skeleton, cx } from "../components/ui";
@@ -11,21 +11,25 @@ type Card_ = { label: string; value: string; sub?: string; cur: number; prev: nu
 
 function cards(d: FbResp): Card_[] {
   const k: FbKpis = d.kpis, p: FbKpis = d.prev;
+  const taxLabel = dec(d.adTaxPct, d.adTaxPct % 1 === 0 ? 0 : 1);
   const out: Card_[] = [
-    { label: "Spend iklan", value: rpk(k.spend), sub: `${nf(k.impressions)} impresi`, cur: k.spend, prev: p.spend, goodUp: null, icon: <Megaphone size={ic} /> },
+    { label: "Spend iklan", value: rpk(k.spend), sub: `+ PPN ${taxLabel}% (${rpk(k.adTax)}) · total ${rpk(k.totalSpend)}`, cur: k.spend, prev: p.spend, goodUp: null, icon: <Megaphone size={ic} /> },
+    { label: `PPN iklan (${taxLabel}%)`, value: rpk(k.adTax), sub: `total tagihan ${rpk(k.totalSpend)}`, cur: k.adTax, prev: p.adTax, goodUp: null, icon: <Receipt size={ic} /> },
     { label: "Impresi", value: nf(k.impressions), sub: `CPM ${rpk(k.cpm)}`, cur: k.impressions, prev: p.impressions, goodUp: true, icon: <Eye size={ic} /> },
-    { label: "Klik link", value: nf(k.clicks), sub: `CPC ${rpk(k.cpc)}`, cur: k.clicks, prev: p.clicks, goodUp: true, icon: <MousePointerClick size={ic} /> },
-    { label: "CTR", value: pct(k.ctr, 2), sub: "klik ÷ impresi", cur: k.ctr, prev: p.ctr, goodUp: true, icon: <Percent size={ic} /> },
+    { label: "Klik link", value: nf(k.clicks), sub: `CPC ${rpk(k.cpc)} · CTR ${pct(k.ctr, 2)}`, cur: k.clicks, prev: p.clicks, goodUp: true, icon: <MousePointerClick size={ic} /> },
   ];
   if (d.hasDigital) out.push(
-    { label: "Pembelian (Meta)", value: nf(k.purchases), sub: `CPA ${k.purchases ? rpk(k.cpa) : "—"}`, cur: k.purchases, prev: p.purchases, goodUp: true, icon: <ShoppingCart size={ic} /> },
+    { label: "Pembelian (Meta)", value: nf(k.purchases), sub: `CTR ${pct(k.ctr, 2)}`, cur: k.purchases, prev: p.purchases, goodUp: true, icon: <ShoppingCart size={ic} /> },
     { label: "Nilai pembelian (Meta)", value: rpk(k.purchaseValue), sub: "dari pixel Meta", cur: k.purchaseValue, prev: p.purchaseValue, goodUp: true, icon: <Coins size={ic} /> },
     { label: "ROAS Meta", value: `${dec(k.roas)}x`, sub: "nilai pixel ÷ spend", cur: k.roas, prev: p.roas, goodUp: true, icon: <Target size={ic} /> },
-    { label: "CPA", value: k.purchases ? rpk(k.cpa) : "—", sub: "spend ÷ pembelian", cur: k.cpa, prev: p.cpa, goodUp: false, icon: <BadgeDollarSign size={ic} /> },
+    { label: "CPA", value: k.purchases ? rpk(k.cpa) : "—", sub: k.purchases ? `incl. PPN ${rpk(k.totalSpend / k.purchases)}` : "spend ÷ pembelian", cur: k.cpa, prev: p.cpa, goodUp: false, icon: <BadgeDollarSign size={ic} /> },
   );
   if (d.hasLeads) out.push(
-    { label: "Leads", value: nf(k.leads), sub: "akun jasa", cur: k.leads, prev: p.leads, goodUp: true, icon: <Users size={ic} /> },
-    { label: "CPL", value: k.leads ? rpk(k.cpl) : "—", sub: "spend ÷ lead", cur: k.cpl, prev: p.cpl, goodUp: false, icon: <Gauge size={ic} /> },
+    { label: "Leads", value: nf(k.leads), sub: `CTR ${pct(k.ctr, 2)} · akun jasa`, cur: k.leads, prev: p.leads, goodUp: true, icon: <Users size={ic} /> },
+    { label: "CPL", value: k.leads ? rpk(k.cpl) : "—", sub: k.leads ? `incl. PPN ${rpk(k.totalSpend / k.leads)}` : "spend ÷ lead", cur: k.cpl, prev: p.cpl, goodUp: false, icon: <Gauge size={ic} /> },
+  );
+  if (!d.hasDigital && !d.hasLeads) out.push(
+    { label: "CTR", value: pct(k.ctr, 2), sub: "klik ÷ impresi", cur: k.ctr, prev: p.ctr, goodUp: true, icon: <Percent size={ic} /> },
   );
   return out;
 }
@@ -106,13 +110,15 @@ export default function FacebookAds() {
             <Card>
               <CardHead title="Per akun iklan" hint="Perbandingan akun pada periode terpilih" />
               <div className="-mx-5 overflow-x-auto px-5">
-                <table className="w-full min-w-[560px] text-[13px]">
-                  <thead><tr className="text-[12px] text-muted"><th className="pb-3 text-left font-medium">Akun</th><th className="px-3 pb-3 text-right font-medium">Spend</th><th className="px-3 pb-3 text-right font-medium">Klik</th><th className="px-3 pb-3 text-right font-medium">Pembelian</th><th className="px-3 pb-3 text-right font-medium">Leads</th><th className="pb-3 pl-3 text-right font-medium">ROAS Meta</th></tr></thead>
+                <table className="w-full min-w-[620px] text-[13px]">
+                  <thead><tr className="text-[12px] text-muted"><th className="pb-3 text-left font-medium">Akun</th><th className="px-3 pb-3 text-right font-medium">Spend</th><th className="px-3 pb-3 text-right font-medium">PPN</th><th className="px-3 pb-3 text-right font-medium">Klik</th><th className="px-3 pb-3 text-right font-medium">Pembelian</th><th className="px-3 pb-3 text-right font-medium">Leads</th><th className="pb-3 pl-3 text-right font-medium">ROAS Meta</th></tr></thead>
                   <tbody className="divide-y divide-line">
                     {d.accounts.map((a) => (
                       <tr key={a.id}>
-                        <td className="py-3"><span className="font-medium">{a.name}</span><span className="block text-[11.5px] text-muted">{LINES[a.line].label}</span></td>
-                        <td className="num px-3 py-3 text-right">{rpk(a.spend)}</td><td className="num px-3 py-3 text-right">{nf(a.clicks)}</td>
+                        <td className="py-3"><span className="font-medium">{a.name}</span><span className="block text-[11.5px] text-muted">{LINES[a.line].label} · PPN {dec(a.adTaxPct, a.adTaxPct % 1 === 0 ? 0 : 1)}%</span></td>
+                        <td className="num px-3 py-3 text-right">{rpk(a.spend)}</td>
+                        <td className="num px-3 py-3 text-right text-muted">{rpk(a.adTax)}</td>
+                        <td className="num px-3 py-3 text-right">{nf(a.clicks)}</td>
                         <td className="num px-3 py-3 text-right">{nf(a.purchases)}</td><td className="num px-3 py-3 text-right">{nf(a.leads)}</td>
                         <td className="num py-3 pl-3 text-right font-semibold">{a.line === "digital" ? `${dec(a.roas)}x` : "—"}</td>
                       </tr>
