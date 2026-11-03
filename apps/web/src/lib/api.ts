@@ -1,6 +1,7 @@
 import { QueryClient, useQuery, keepPreviousData } from "@tanstack/react-query";
 import type {
   Bootstrap, DashboardResp, CampaignsResp, HourlyResp, ProductsResp, PlResp, ManualResp, BotAction, FbResp, LynkResp,
+  AutopilotResp, AgentRun, ChatAttachment,
 } from "@iklan/shared";
 import { useView } from "./view";
 
@@ -64,11 +65,34 @@ export const usePl = () => useRange<PlResp>("pl", { withAcc: false });
 export const useManual = (limit: number) =>
   useQuery({ queryKey: ["manual", limit], queryFn: () => api<ManualResp>(`/manual?limit=${limit}`), placeholderData: keepPreviousData });
 
+export function useAutopilot() {
+  const v = useView();
+  return useQuery({
+    queryKey: ["autopilot", v.acc],
+    queryFn: ({ signal }) => api<AutopilotResp>(`/autopilot?acc=${encodeURIComponent(v.acc)}`, { signal }),
+    placeholderData: keepPreviousData,
+    staleTime: 25_000,
+  });
+}
+
 export const actionsApi = {
   create: (campaignId: string, action: "pause" | "activate" | "scale") => api<BotAction>("/actions", { method: "POST", json: { campaignId, action } }),
+  get: (id: number) => api<BotAction>(`/actions/${id}`),
   confirm: (id: number) => api<BotAction>(`/actions/${id}/confirm`, { method: "POST" }),
   cancel: (id: number) => api<BotAction>(`/actions/${id}/cancel`, { method: "POST" }),
   revert: (id: number) => api<BotAction>(`/actions/${id}/revert`, { method: "POST" }),
+};
+
+export const autopilotApi = {
+  run: (accountId?: string) => api<{ skippedLock?: boolean; runs: AgentRun[] }>("/autopilot/run", { method: "POST", json: accountId ? { accountId } : {} }),
+  uploadMedia: (file: File) =>
+    api<ChatAttachment>("/chat/media", {
+      method: "PUT",
+      headers: { "Content-Type": file.type || "application/octet-stream", "X-File-Name": encodeURIComponent(file.name) },
+      body: file,
+    }),
+  createAsset: (payload: Record<string, unknown>) => api<{ id: number; note?: string }>("/product-assets", { method: "POST", json: payload }),
+  updateAsset: (id: number, payload: Record<string, unknown>) => api<{ ok: boolean }>(`/product-assets/${id}`, { method: "PATCH", json: payload }),
 };
 
 /** Invalidasi semua data agregat (dipakai setelah input/aksi & saat SSE melapor versi baru). */

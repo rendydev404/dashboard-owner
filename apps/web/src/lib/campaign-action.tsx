@@ -10,6 +10,7 @@ export const LAUNCH_GOAL: Record<string, string> = {
 export function actionSummary(a: BotAction) {
   const p = a.params as any;
   if (a.action === "pause") return { title: "Pause kampanye?", verb: "Pause", detail: `Status: Aktif → Jeda` };
+  if (a.action === "pause_ad") return { title: "Pause iklan individual?", verb: "Pause Iklan", detail: `Iklan "${p.adName ?? p.adId}": Aktif → Jeda` };
   if (a.action === "activate") return { title: "Aktifkan kampanye?", verb: "Aktifkan", detail: `Status: Jeda → Aktif` };
   if (a.action === "scale") {
     if (p.adsets?.length) return { title: `Naikkan budget ${p.pct}%?`, verb: "Naikkan", detail: p.adsets.map((s: any) => `${s.name}: ${rp(s.before)} → ${rp(s.after)}/hari`).join("\n") };

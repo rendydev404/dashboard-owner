@@ -1,7 +1,7 @@
 import { useState, useSyncExternalStore, type ReactNode } from "react";
 import {
   LayoutGrid, Megaphone, Clock3, Package, Wallet, Settings, LogOut, Menu, MessageCircle, MoreHorizontal,
-  AlertTriangle, RefreshCw, Plug,
+  AlertTriangle, RefreshCw, Plug, Cpu,
 } from "lucide-react";
 import { fmtRange, type Bootstrap } from "@iklan/shared";
 import { setView, useView, type Tab } from "../lib/view";
@@ -18,6 +18,7 @@ export const useChatOpen = () => useSyncExternalStore((f) => { chatSubs.add(f); 
 
 const NAV: { tab: Tab; label: string; icon: typeof LayoutGrid }[] = [
   { tab: "ringkasan", label: "Ringkasan", icon: LayoutGrid },
+  { tab: "autopilot", label: "Autopilot AI", icon: Cpu },
   { tab: "kampanye", label: "Kampanye", icon: Megaphone },
   { tab: "jam", label: "Per Jam", icon: Clock3 },
   { tab: "produk", label: "Produk & Jasa", icon: Package },
@@ -25,7 +26,14 @@ const NAV: { tab: Tab; label: string; icon: typeof LayoutGrid }[] = [
   { tab: "chat", label: "Chat AI", icon: MessageCircle },
 ];
 export const TAB_TITLE: Record<Tab, string> = {
-  ringkasan: "Ringkasan", kampanye: "Kampanye", jam: "Per Jam", produk: "Produk & Jasa", labarugi: "Laba Rugi", chat: "Chat AI", pengaturan: "Pengaturan",
+  ringkasan: "Ringkasan",
+  autopilot: "Autopilot AI",
+  kampanye: "Kampanye",
+  jam: "Per Jam",
+  produk: "Produk & Jasa",
+  labarugi: "Laba Rugi",
+  chat: "Chat AI",
+  pengaturan: "Pengaturan",
 };
 
 async function logout() {
@@ -205,14 +213,14 @@ export function Shell({ boot, children }: { boot: Bootstrap; children: ReactNode
               <Icon size={20} strokeWidth={v.tab === t ? 2.3 : 1.8} />{l}
             </button>
           ))}
-          <button onClick={() => setMore(true)} className={cx("flex h-[58px] flex-col items-center justify-center gap-1 text-[11px]", ["jam", "produk", "pengaturan"].includes(v.tab) ? "font-semibold text-accent" : "text-muted")}>
+          <button onClick={() => setMore(true)} className={cx("flex h-[58px] flex-col items-center justify-center gap-1 text-[11px]", ["autopilot", "jam", "produk", "pengaturan"].includes(v.tab) ? "font-semibold text-accent" : "text-muted")}>
             <MoreHorizontal size={20} />Lainnya
           </button>
         </div>
       </nav>
       <Modal open={more} onClose={() => setMore(false)} title="Menu lainnya">
         <div className="space-y-1">
-          {([["jam", "Per Jam", Clock3], ["produk", "Produk & Jasa", Package], ["pengaturan", "Pengaturan", Settings]] as const).map(([t, l, Icon]) => (
+          {([["autopilot", "Autopilot AI", Cpu], ["jam", "Per Jam", Clock3], ["produk", "Produk & Jasa", Package], ["pengaturan", "Pengaturan", Settings]] as const).map(([t, l, Icon]) => (
             <NavItem key={t} tab={t} label={l} icon={Icon} onClick={() => { setView({ tab: t }); setMore(false); }} />
           ))}
           <NavItem label="Keluar" icon={LogOut} onClick={logout} />

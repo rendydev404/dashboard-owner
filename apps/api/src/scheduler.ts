@@ -3,6 +3,7 @@ import { hourNow, todayKey } from "@iklan/shared";
 import { sql } from "./db";
 import { env, metaConfigured } from "./env";
 import { runSync } from "./meta/sync";
+import { runAutopilotCycle } from "./autopilot";
 import { lastUsagePct } from "./meta/client";
 import { log, errMsg } from "./log";
 
@@ -24,21 +25,28 @@ async function tick() {
           AND NOT EXISTS (SELECT 1 FROM sync_runs r WHERE r.account_id = a.id AND r.kind = 'backfill' AND r.started_at > now() - interval '6 hours')`;
       for (const a of fresh) await runSync("backfill", a.id);
 
+      let synced = false;
       if (h === 2 && lastNightly !== today) {
         lastNightly = today;
         await runSync("nightly");
+        synced = true;
       } else {
         const every = (h < 6 ? 120 : env.SYNC_INTERVAL_MIN) * 60_000;
         if (Date.now() - lastRecent >= every && lastUsagePct < 75) {
           lastRecent = Date.now();
           await runSync("recent");
+          synced = true;
         }
+      }
+      if (synced) {
+        await runAutopilotCycle("sync").catch((e) => log.error("autopilot pasca-sync gagal", { error: errMsg(e) }));
       }
     }
     if (h === 3 && lastCleanup !== today) {
       lastCleanup = today;
       await sql`DELETE FROM sessions WHERE expires_at < now()`;
       await sql`UPDATE bot_actions SET status = 'expired' WHERE status = 'pending' AND (expires_at IS NULL OR expires_at < now()) AND created_at < now() - interval '1 hour'`;
+      await sql`UPDATE agent_runs SET status = 'failed', error = 'Siklus terputus melebihi batas waktu', finished_at = now() WHERE status = 'running' AND started_at < now() - interval '2 hours'`;
       await sql`DELETE FROM lynk_events WHERE received_at < now() - interval '180 days'`;
       log.info("cleanup harian selesai");
     }

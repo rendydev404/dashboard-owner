@@ -91,7 +91,7 @@ function planOf(input: VideoAdInput): LaunchPlan {
 }
 
 /** Usulan video dari bot → run baru (status queued) + proses render di latar belakang. */
-export async function createVideoAd(raw: unknown, userId: number): Promise<{ runId: number }> {
+export async function createVideoAd(raw: unknown, userId: number, opts?: { autoApprove?: boolean }): Promise<{ runId: number }> {
   if (!creativeConfigured()) throw new Error("Worker video belum dipasang di server (CREATIVE_WORKER_URL). Bilang ke user fitur video belum aktif.");
   const input = videoAdInput.parse(raw);
   const cfg = await loadConfig();
@@ -125,6 +125,7 @@ export async function createVideoAd(raw: unknown, userId: number): Promise<{ run
   const brief = {
     hook: input.hook, bullets: input.bullets, priceBadge: input.priceBadge, cta: input.cta, ctaSub: input.ctaSub, script: input.script,
     mediaIds: input.mediaIds, logoMediaId: input.logoMediaId, brandName: input.brandName ?? acc.name,
+    autoApprove: Boolean(opts?.autoApprove),
   };
   const [row] = await sql`
     INSERT INTO creative_runs (user_id, account_id, brief, plan, note)
@@ -193,6 +194,10 @@ async function render(runId: number, userId: number) {
       await update(runId, { status: "review", media_id: media.id, voice: j.voice ?? null, qc: j.qc ?? null, result: j.result ?? null, progress: 100, note: null });
       void wk(`/jobs/${job.id}`, { method: "DELETE" }).catch(() => {});
       log.info("video iklan siap direview", { runId, media: media.id });
+      const qcOk = Boolean((j.qc as any)?.ok ?? true);
+      if (b.autoApprove && qcOk && metaMode() === "mcp") {
+        await approveRun(runId).catch((e) => log.warn("auto-approve video autopilot gagal", { runId, error: errMsg(e) }));
+      }
       return;
     }
     if (Date.now() - started > RENDER_MAX_MS) throw new Error("Render tidak selesai dalam 15 menit");

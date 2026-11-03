@@ -4,7 +4,7 @@ const schema = z.object({
   NODE_ENV: z.enum(["development", "production", "test"]).default("development"),
   PORT: z.coerce.number().default(3000),
   APP_URL: z.string().default("http://localhost:5173"),
-  DATABASE_URL: z.string().min(1),
+  DATABASE_URL: process.env.NODE_ENV === "test" ? z.string().default("postgres://test@127.0.0.1:1/test") : z.string().min(1),
   DB_POOL_MAX: z.coerce.number().default(5),
   SESSION_SECRET: z.string().min(16).default("dev-secret-ganti-di-produksi"),
   META_API_VERSION: z.string().default("v24.0"),
