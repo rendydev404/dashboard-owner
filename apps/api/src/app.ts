@@ -30,6 +30,7 @@ import { handleChat, updateRule } from "./bot";
 import { MEDIA_LIMITS, MediaError, attachmentOf, getMedia, openByToken, removeMedia, saveMedia } from "./media";
 import { mcpHandler } from "./mcp-server";
 import { approveRun, discardRun, getRun, runCover, runVideo } from "./creative";
+import { createProductAsset, getAutopilotDashboard, runAutopilotCycle, updateProductAsset } from "./autopilot";
 import { runSync, lastMetaError, fetchAccountInfo } from "./meta/sync";
 import { subscribe } from "./events";
 import { log, errMsg } from "./log";
@@ -342,12 +343,40 @@ api.get("/creative/:id/video", owner, async (c) => {
   return c.body(Readable.toWeb(f.stream({ start, end })) as ReadableStream, 206, { ...base, "Content-Range": `bytes ${start}-${end}/${size}`, "Content-Length": String(end - start + 1) });
 });
 
+/* ---------------------------------------------------------------- autopilot & bank aset produk */
+
+api.get("/autopilot", async (c) => {
+  c.header("Cache-Control", "private, no-store");
+  return c.json(await getAutopilotDashboard(c.req.query("acc")));
+});
+
+const autopilotRunLimiter = rateLimit(15, 3600_000, (c) => "autopilot:" + (c as Context<AppEnv>).get("user").id);
+api.post("/autopilot/run", owner, autopilotRunLimiter, async (c) => {
+  const b = z.object({ accountId: z.string().regex(/^\d{5,25}$/).optional() }).default({}).parse(await c.req.json().catch(() => ({})));
+  const res = await runAutopilotCycle("manual", { accountId: b.accountId, userId: c.get("user").id });
+  return c.json(res);
+});
+
+api.post("/product-assets", owner, async (c) => {
+  return c.json(await createProductAsset(await c.req.json(), c.get("user").id), 201);
+});
+
+api.patch("/product-assets/:id{[0-9]+}", owner, async (c) => {
+  await updateProductAsset(Number(c.req.param("id")), await c.req.json());
+  return c.json({ ok: true });
+});
+
 /* ---------------------------------------------------------------- pengaturan */
 
 const settingsSchema = z.object({
   targetRoas: z.number().min(0).max(100), maxCpa: z.number().int().min(0).nullable(), maxCpl: z.number().int().min(0).nullable(),
   killAfterSpend: z.number().int().min(0), scaleStepPct: z.number().int().min(1).max(50), adTaxPct: z.number().min(0).max(50),
   maxDailyBudget: z.number().int().min(0).nullable(),
+  dailyStopLoss: z.number().int().min(0).nullable(),
+  maxAccountDailyBudget: z.number().int().min(0).nullable(),
+  cooldownHours: z.number().int().min(0).max(72),
+  maxAutoLaunchesPerDay: z.number().int().min(0).max(10),
+  autoLaunchEnabled: z.boolean(),
 }).partial();
 
 api.patch("/accounts/:id/settings", owner, async (c) => {
@@ -357,12 +386,21 @@ api.patch("/accounts/:id/settings", owner, async (c) => {
   if (!cfg.accounts.some((a) => a.id === id)) throw new HTTPException(404, { message: "Akun tidak ditemukan" });
   const rule = ["targetRoas", "maxCpa", "maxCpl", "killAfterSpend", "scaleStepPct"] as const;
   for (const f of rule) if (b[f] !== undefined && b[f] !== null) await updateRule([id], f, b[f] as number, c.get("user"), "table");
-  if (b.adTaxPct !== undefined || b.maxDailyBudget !== undefined || b.maxCpa === null || b.maxCpl === null) {
+  if (
+    b.adTaxPct !== undefined || b.maxDailyBudget !== undefined || b.maxCpa === null || b.maxCpl === null ||
+    b.dailyStopLoss !== undefined || b.maxAccountDailyBudget !== undefined || b.cooldownHours !== undefined ||
+    b.maxAutoLaunchesPerDay !== undefined || b.autoLaunchEnabled !== undefined
+  ) {
     await sql`
       UPDATE account_settings SET
         ad_tax_pct = COALESCE(${b.adTaxPct ?? null}, ad_tax_pct),
         max_daily_budget = ${b.maxDailyBudget === undefined ? sql`max_daily_budget` : b.maxDailyBudget},
         max_cpa = ${b.maxCpa === null ? null : sql`max_cpa`}, max_cpl = ${b.maxCpl === null ? null : sql`max_cpl`},
+        daily_stop_loss = ${b.dailyStopLoss === undefined ? sql`daily_stop_loss` : b.dailyStopLoss},
+        max_account_daily_budget = ${b.maxAccountDailyBudget === undefined ? sql`max_account_daily_budget` : b.maxAccountDailyBudget},
+        cooldown_hours = COALESCE(${b.cooldownHours ?? null}, cooldown_hours),
+        max_auto_launches_per_day = COALESCE(${b.maxAutoLaunchesPerDay ?? null}, max_auto_launches_per_day),
+        auto_launch_enabled = COALESCE(${b.autoLaunchEnabled ?? null}, auto_launch_enabled),
         updated_at = now(), updated_by = ${c.get("user").id}
       WHERE account_id = ${id}`;
     await bumpDataVersion();
@@ -388,8 +426,10 @@ api.post("/accounts", owner, async (c) => {
       VALUES (${b.id}, ${b.name}, ${b.line}, ${b.resultActionType ?? (b.line === "jasa" ? "onsite_conversion.messaging_conversation_started_7d" : "omni_purchase")},
               ${b.botMode ?? "suggest"}, ${b.active ?? true}, ${tz})`;
     await tx`
-      INSERT INTO account_settings (account_id, target_roas, max_cpa, max_cpl, ad_tax_pct, scale_step_pct, kill_after_spend)
-      VALUES (${b.id}, ${d.targetRoas}, ${d.maxCpa}, ${d.maxCpl}, ${d.adTaxPct}, ${d.scaleStepPct}, ${d.killAfterSpend})`;
+      INSERT INTO account_settings (account_id, target_roas, max_cpa, max_cpl, ad_tax_pct, scale_step_pct, kill_after_spend,
+                                    daily_stop_loss, max_account_daily_budget, cooldown_hours, max_auto_launches_per_day, auto_launch_enabled)
+      VALUES (${b.id}, ${d.targetRoas}, ${d.maxCpa}, ${d.maxCpl}, ${d.adTaxPct}, ${d.scaleStepPct}, ${d.killAfterSpend},
+              ${d.dailyStopLoss}, ${d.maxAccountDailyBudget}, ${d.cooldownHours}, ${d.maxAutoLaunchesPerDay}, ${d.autoLaunchEnabled})`;
   });
   await bumpDataVersion();
   if (metaConfigured()) void runSync("backfill", b.id).catch(() => {});

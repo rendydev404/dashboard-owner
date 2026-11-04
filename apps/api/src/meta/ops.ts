@@ -44,6 +44,18 @@ export async function setStatus(accountId: string, campaignId: string, status: "
   return metaPost(campaignId, { status });
 }
 
+/** Ubah status satu iklan individual (mis. mematikan 1 kreatif boncos di dalam ad set CBO tanpa menjeda kampanye pemenang). */
+export async function setAdStatus(accountId: string, adId: string, status: "ACTIVE" | "PAUSED"): Promise<unknown> {
+  if (metaMode() === "mcp") {
+    const base = { ad_account_id: accountId, entity_id: adId, entity_type: "ad" };
+    const ctx = { conv: conversationId(), ...job(status === "PAUSED" ? "pause iklan boncos" : "aktifkan iklan") };
+    if (status === "ACTIVE") return callTool("ads_activate_entity", base, ctx);
+    const r = await callTool("ads_update_entity", { ...base, fields: JSON.stringify({ status: "PAUSED" }) }, ctx);
+    return publishIfDraft(r, accountId, adId, "ad", ctx);
+  }
+  return metaPost(adId, { status });
+}
+
 /** Ubah budget harian satu entity (kampanye CBO atau ad set). `wasActive`: nyalakan lagi kalau Meta mem-pause paksa saat edit. */
 export async function setDailyBudget(accountId: string, entityId: string, type: "campaign" | "ad_set", budget: number, wasActive: boolean): Promise<unknown> {
   if (metaMode() === "mcp") {

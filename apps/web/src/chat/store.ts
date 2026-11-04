@@ -40,6 +40,12 @@ export function greet() {
   if (!state.msgs.length) botText("Halo! Gw bot iklan lo, otaknya Claude. Tanya angka, minta analisis, pindah akun atau periode, ubah aturan, sampai pause / scale kampanye, semua bisa dari sini.");
 }
 export function updateAction(a: BotAction) { set({ msgs: state.msgs.map((m) => (m.action?.id === a.id ? { ...m, action: a } : m)) }); }
+// Iklan yang langsung ditayangkan bot selesai di server; kartunya diperbarui dari event realtime (App.tsx).
+window.addEventListener("iklan:action", (ev) => {
+  const id = Number((ev as CustomEvent<number>).detail);
+  if (!state.msgs.some((m) => m.action?.id === id)) return;
+  void actionsApi.get(id).then((a) => { updateAction(a); if (a.status === "executed") refreshData(); }).catch(() => {});
+});
 export function resetChat() {
   abort?.abort();
   state.msgs.forEach((m) => m.files?.forEach((f) => URL.revokeObjectURL(f.preview)));

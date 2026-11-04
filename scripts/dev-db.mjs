@@ -11,7 +11,10 @@ const { default: EmbeddedPostgres } = await import(pathToFileURL(req.resolve("em
 
 const port = Number(process.env.DEV_DB_PORT || 54329);
 const dir = path.join(root, ".pgdata");
-const pg = new EmbeddedPostgres({ databaseDir: dir, user: "postgres", password: "postgres", port, persistent: true, onLog: () => {} });
+const pg = new EmbeddedPostgres({
+  databaseDir: dir, user: "postgres", password: "postgres", port, persistent: true,
+  initdbFlags: ["--encoding=UTF8", "--locale=C"], onLog: () => {},
+});
 if (!existsSync(path.join(dir, "PG_VERSION"))) await pg.initialise();
 await pg.start();
 console.log(`dev-db siap: postgres://postgres:postgres@127.0.0.1:${port}/postgres`);

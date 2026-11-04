@@ -9,6 +9,7 @@ import Ringkasan from "./pages/RingkasanTabs";
 import Login from "./pages/Login";
 
 // Halaman selain Ringkasan dimuat saat dibuka (chunk terpisah).
+const Autopilot = lazy(() => import("./pages/Autopilot"));
 const Kampanye = lazy(() => import("./pages/Kampanye"));
 const PerJam = lazy(() => import("./pages/PerJam"));
 const Produk = lazy(() => import("./pages/Produk"));
@@ -16,7 +17,7 @@ const LabaRugi = lazy(() => import("./pages/LabaRugi"));
 const ChatPage = lazy(() => import("./pages/ChatPage"));
 const Pengaturan = lazy(() => import("./pages/Pengaturan"));
 const ChatPanel = lazy(() => import("./chat/ChatPanel"));
-const prefetch = () => { void import("./pages/Kampanye"); void import("./pages/LabaRugi"); void import("./chat/ChatPanel"); };
+const prefetch = () => { void import("./pages/Autopilot"); void import("./pages/Kampanye"); void import("./pages/LabaRugi"); void import("./chat/ChatPanel"); };
 
 /** Realtime: server hanya mengirim "versi data berubah"; client invalidasi query dengan debounce. */
 function useServerEvents(enabled: boolean) {
@@ -31,6 +32,8 @@ function useServerEvents(enabled: boolean) {
         if (last.current && e.v !== last.current) { clearTimeout(timer); timer = setTimeout(() => refreshData(), 2000); }
         last.current = e.v;
       } else if (e.type === "sale") toast(`Penjualan baru ${rpk(e.amount)}${e.product ? ` · ${e.product}` : ""}`, { tone: "info" });
+      else if (e.type === "autopilot" && e.status === "completed") refreshData();
+      else if (e.type === "action") window.dispatchEvent(new CustomEvent("iklan:action", { detail: e.id }));
     };
     return () => { clearTimeout(timer); es.close(); };
   }, [enabled]);
@@ -38,7 +41,7 @@ function useServerEvents(enabled: boolean) {
 
 function Page() {
   const v = useView();
-  const map = { ringkasan: Ringkasan, kampanye: Kampanye, jam: PerJam, produk: Produk, labarugi: LabaRugi, chat: ChatPage, pengaturan: Pengaturan };
+  const map = { ringkasan: Ringkasan, autopilot: Autopilot, kampanye: Kampanye, jam: PerJam, produk: Produk, labarugi: LabaRugi, chat: ChatPage, pengaturan: Pengaturan };
   const C = map[v.tab];
   return <Suspense fallback={<div className="card p-5"><Skeleton className="h-[360px]" /></div>}><C /></Suspense>;
 }

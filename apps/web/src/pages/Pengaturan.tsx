@@ -1,15 +1,36 @@
 import { useState } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { Plus, Trash2, RefreshCw, CheckCircle2, XCircle, Pencil } from "lucide-react";
-import { rpk, parseRp, LINES, type Account, type Line, type Product, type User } from "@iklan/shared";
+import { rpk, parseRp, LINES, type Account, type BotMode, type Line, type Product, type User } from "@iklan/shared";
 import { api, useBootstrap, refreshData } from "../lib/api";
-import { Card, CardHead, Modal, toast, confirmDialog, cx } from "../components/ui";
+import { Card, CardHead, Modal, toast, confirmDialog, cx, CustomSelect, CustomSwitch } from "../components/ui";
 
 const RESULT_TYPES = [
-  ["omni_purchase", "Pembelian (pixel / omni)"],
-  ["onsite_conversion.messaging_conversation_started_7d", "Percakapan WhatsApp/Messenger dimulai"],
-  ["lead", "Lead form"],
-  ["onsite_conversion.lead_grouped", "Lead (semua sumber)"],
+  { value: "omni_purchase", label: "Pembelian (pixel / omni)" },
+  { value: "onsite_conversion.messaging_conversation_started_7d", label: "Percakapan WhatsApp/Messenger dimulai" },
+  { value: "lead", label: "Lead form" },
+  { value: "onsite_conversion.lead_grouped", label: "Lead (semua sumber)" },
+] as const;
+
+const LINE_OPTIONS = [
+  { value: "digital" as Line, label: "Produk Digital AI (omzet dari lynk.id)" },
+  { value: "jasa" as Line, label: "Jasa AI (leads & closing manual)" },
+] as const;
+
+const LINE_SHORT_OPTIONS = [
+  { value: "digital" as Line, label: "Digital" },
+  { value: "jasa" as Line, label: "Jasa" },
+] as const;
+
+const BOT_MODE_OPTIONS = [
+  { value: "auto" as BotMode, label: "Full Autopilot (eksekusi otomatis + guardrail)" },
+  { value: "suggest" as BotMode, label: "Mode Saran (buat usulan pending)" },
+  { value: "off" as BotMode, label: "Nonaktif" },
+] as const;
+
+const ROLE_OPTIONS = [
+  { value: "admin", label: "Admin / CS" },
+  { value: "owner", label: "Owner" },
 ] as const;
 
 function useSave(path: string, method: "POST" | "PATCH" | "DELETE", msg: string, after?: () => void) {
@@ -31,24 +52,77 @@ function Status({ ok, label, detail }: { ok: boolean; label: string; detail: str
 const ago = (iso: string | null) => (iso ? new Date(iso).toLocaleString("id-ID", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }) : "belum pernah");
 
 function AccountForm({ acc, onDone }: { acc?: Account; onDone: () => void }) {
-  const [f, setF] = useState({ id: acc?.id ?? "", name: acc?.name ?? "", line: acc?.line ?? ("digital" as Line), resultActionType: acc?.resultActionType ?? "omni_purchase", active: acc?.active ?? true });
+  const [f, setF] = useState({
+    id: acc?.id ?? "",
+    name: acc?.name ?? "",
+    line: acc?.line ?? ("digital" as Line),
+    resultActionType: acc?.resultActionType ?? "omni_purchase",
+    botMode: acc?.botMode ?? ("suggest" as BotMode),
+    active: acc?.active ?? true,
+  });
   const m = useSave(acc ? `/accounts/${acc.id}` : "/accounts", acc ? "PATCH" : "POST", acc ? "Akun diperbarui" : "Akun ditambahkan, data mulai ditarik", onDone);
   return (
-    <form className="space-y-3" onSubmit={(e) => { e.preventDefault(); m.mutate(acc ? { name: f.name, line: f.line, resultActionType: f.resultActionType, active: f.active } : f); }}>
-      {!acc && <label className="block"><span className="label">ID akun iklan (angka, tanpa act_)</span><input className="input mt-1" inputMode="numeric" value={f.id} onChange={(e) => setF({ ...f, id: e.target.value.replace(/\D/g, "") })} required placeholder="1392053332395676" /></label>}
-      <label className="block"><span className="label">Nama tampilan</span><input className="input mt-1" value={f.name} onChange={(e) => setF({ ...f, name: e.target.value })} required maxLength={100} /></label>
-      <label className="block"><span className="label">Jenis lini</span>
-        <select className="input mt-1" value={f.line} onChange={(e) => { const line = e.target.value as Line; setF({ ...f, line, resultActionType: line === "jasa" ? RESULT_TYPES[1][0] : RESULT_TYPES[0][0] }); }}>
-          <option value="digital">Produk Digital AI (omzet dari lynk.id)</option><option value="jasa">Jasa AI (leads & closing manual)</option>
-        </select>
+    <form
+      className="space-y-3"
+      onSubmit={(e) => {
+        e.preventDefault();
+        m.mutate(acc ? { name: f.name, line: f.line, resultActionType: f.resultActionType, botMode: f.botMode, active: f.active } : f);
+      }}
+    >
+      {!acc && (
+        <label className="block">
+          <span className="label">ID akun iklan (angka, tanpa act_)</span>
+          <input className="input mt-1" inputMode="numeric" value={f.id} onChange={(e) => setF({ ...f, id: e.target.value.replace(/\D/g, "") })} required placeholder="1392053332395676" />
+        </label>
+      )}
+      <label className="block">
+        <span className="label">Nama tampilan</span>
+        <input className="input mt-1" value={f.name} onChange={(e) => setF({ ...f, name: e.target.value })} required maxLength={100} />
       </label>
-      <label className="block"><span className="label">Hasil yang dihitung</span>
-        <select className="input mt-1" value={f.resultActionType} onChange={(e) => setF({ ...f, resultActionType: e.target.value })}>
-          {RESULT_TYPES.map(([v, l]) => <option key={v} value={v}>{l}</option>)}
-        </select>
-      </label>
-      {acc && <label className="flex items-center gap-2 text-[13.5px]"><input type="checkbox" checked={f.active} onChange={(e) => setF({ ...f, active: e.target.checked })} className="size-4 accent-[var(--accent)]" /> Akun aktif (ikut sinkron & tampil)</label>}
-      <button className="btn btn-primary w-full" disabled={m.isPending}>{m.isPending ? "Menyimpan…" : "Simpan"}</button>
+      <div className="block">
+        <span className="label">Jenis lini</span>
+        <div className="mt-1">
+          <CustomSelect
+            value={f.line}
+            options={LINE_OPTIONS}
+            ariaLabel="Jenis lini"
+            onChange={(line) => setF({ ...f, line, resultActionType: line === "jasa" ? RESULT_TYPES[1].value : RESULT_TYPES[0].value })}
+          />
+        </div>
+      </div>
+      <div className="block">
+        <span className="label">Hasil yang dihitung</span>
+        <div className="mt-1">
+          <CustomSelect
+            value={f.resultActionType}
+            options={RESULT_TYPES}
+            ariaLabel="Hasil yang dihitung"
+            onChange={(resultActionType) => setF({ ...f, resultActionType })}
+          />
+        </div>
+      </div>
+      <div className="block">
+        <span className="label">Mode Autopilot AI</span>
+        <div className="mt-1">
+          <CustomSelect
+            value={f.botMode}
+            options={BOT_MODE_OPTIONS}
+            ariaLabel="Mode Autopilot AI"
+            onChange={(botMode) => setF({ ...f, botMode })}
+          />
+        </div>
+      </div>
+      {acc && (
+        <div className="rounded-xl border border-line px-3.5 py-2.5">
+          <CustomSwitch
+            checked={f.active}
+            onChange={(active) => setF({ ...f, active })}
+            label="Akun aktif"
+            hint="Ikut disinkronkan dari Meta & dievaluasi oleh Autopilot"
+          />
+        </div>
+      )}
+      <button className="btn btn-primary w-full" disabled={m.isPending}>{m.isPending ? "Menyimpan..." : "Simpan"}</button>
     </form>
   );
 }
@@ -58,13 +132,20 @@ function ProductForm({ p, onDone }: { p?: Product; onDone: () => void }) {
   const m = useSave(p ? `/products/${p.id}` : "/products", p ? "PATCH" : "POST", "Produk disimpan", onDone);
   return (
     <form className="space-y-3" onSubmit={(e) => { e.preventDefault(); m.mutate({ ...(p ? {} : { line: f.line }), name: f.name, price: f.price ? parseRp(f.price) : null, cogs: parseRp(f.cogs), url: f.url || null }); }}>
-      {!p && <label className="block"><span className="label">Lini</span><select className="input mt-1" value={f.line} onChange={(e) => setF({ ...f, line: e.target.value as Line })}><option value="jasa">Jasa AI</option><option value="digital">Produk Digital AI</option></select></label>}
+      {!p && (
+        <div className="block">
+          <span className="label">Lini</span>
+          <div className="mt-1">
+            <CustomSelect value={f.line} options={LINE_OPTIONS} ariaLabel="Lini produk" onChange={(line) => setF({ ...f, line })} />
+          </div>
+        </div>
+      )}
       <label className="block"><span className="label">Nama</span><input className="input mt-1" value={f.name} onChange={(e) => setF({ ...f, name: e.target.value })} required maxLength={200} /></label>
       <div className="grid grid-cols-2 gap-3">
         <label className="block"><span className="label">Harga standar</span><input className="input mt-1" inputMode="decimal" placeholder="7,5jt" value={f.price} onChange={(e) => setF({ ...f, price: e.target.value })} /></label>
         <label className="block"><span className="label">HPP standar</span><input className="input mt-1" inputMode="decimal" placeholder="2,5jt" value={f.cogs} onChange={(e) => setF({ ...f, cogs: e.target.value })} /></label>
       </div>
-      <label className="block"><span className="label">Link (opsional)</span><input className="input mt-1" type="url" placeholder="https://lynk.id/…" value={f.url} onChange={(e) => setF({ ...f, url: e.target.value })} /></label>
+      <label className="block"><span className="label">Link halaman produk (wajib untuk iklan Sales)</span><input className="input mt-1" type="url" placeholder="https://lynk.id/..." value={f.url} onChange={(e) => setF({ ...f, url: e.target.value })} /></label>
       <button className="btn btn-primary w-full" disabled={m.isPending}>Simpan</button>
     </form>
   );
@@ -85,7 +166,12 @@ function Users() {
         <form className="space-y-3" onSubmit={(e) => { e.preventDefault(); m.mutate(f); }}>
           <label className="block"><span className="label">Nama</span><input className="input mt-1" value={f.name} onChange={(e) => setF({ ...f, name: e.target.value })} required /></label>
           <label className="block"><span className="label">Email</span><input className="input mt-1" type="email" value={f.email} onChange={(e) => setF({ ...f, email: e.target.value })} required /></label>
-          <label className="block"><span className="label">Peran</span><select className="input mt-1" value={f.role} onChange={(e) => setF({ ...f, role: e.target.value })}><option value="admin">Admin / CS</option><option value="owner">Owner</option></select></label>
+          <div className="block">
+            <span className="label">Peran</span>
+            <div className="mt-1">
+              <CustomSelect value={f.role} options={ROLE_OPTIONS} ariaLabel="Peran pengguna" onChange={(role) => setF({ ...f, role })} />
+            </div>
+          </div>
           <label className="block"><span className="label">Password (min. 10 karakter)</span><input className="input mt-1" type="password" minLength={10} autoComplete="new-password" value={f.password} onChange={(e) => setF({ ...f, password: e.target.value })} required /></label>
           <button className="btn btn-primary w-full" disabled={m.isPending}>Tambah</button>
         </form>
@@ -100,7 +186,7 @@ export default function Pengaturan() {
   const i = boot.integration;
   const [accModal, setAccModal] = useState<Account | "new" | null>(null);
   const [prodModal, setProdModal] = useState<Product | "new" | null>(null);
-  const [fc, setFc] = useState({ line: "digital", name: "", monthly: "" });
+  const [fc, setFc] = useState<{ line: Line; name: string; monthly: string }>({ line: "digital", name: "", monthly: "" });
   const sync = useSave("/sync", "POST", "Sinkronisasi dimulai, data akan diperbarui otomatis");
   const addFc = useSave("/fixed-costs", "POST", "Biaya tetap ditambahkan", () => setFc({ ...fc, name: "", monthly: "" }));
   const fee = (line: Line) => boot.lineSettings.find((s) => s.line === line)?.feePct ?? 0;
@@ -116,17 +202,26 @@ export default function Pengaturan() {
             detail={!i.metaConfigured ? "Belum terhubung: login Claude Code di VPS (user claude-ads) atau isi META_SYSTEM_USER_TOKEN" : i.metaError ?? `Sinkron terakhir ${ago(i.lastSyncAt)}${i.metaTokenExpiresAt ? ` · login berlaku sampai ${ago(i.metaTokenExpiresAt)}` : ""}`} />
           <Status ok={i.lynkConfigured && !!i.lastLynkAt} label="Webhook lynk.id"
             detail={!i.lynkConfigured ? "LYNK_MERCHANT_KEY belum diisi di server" : `URL: ${location.origin}/webhooks/lynk · ${i.lastLynkAt ? `transaksi terakhir ${ago(i.lastLynkAt)}` : "belum ada transaksi masuk (impor riwayat: deploy/lynk-forward.md)"}`} />
-          <Status ok={i.aiConfigured} label="Bot AI (Claude)" detail={i.aiConfigured ? "Terhubung" : "ANTHROPIC_API_KEY belum diisi · bot memakai mode aturan"} />
+          <Status ok={i.aiConfigured} label="Bot AI (Claude)" detail={i.aiConfigured ? "Terhubung" : "ANTHROPIC_API_KEY belum diisi · bot memakai mode aturan kuantitatif"} />
         </div>
       </Card>
 
       <Card>
-        <CardHead title="Akun iklan" hint="Jenis lini menentukan KPI & aturan bot." right={<button className="btn h-9 min-h-0" onClick={() => setAccModal("new")}><Plus size={15} /> Tambah</button>} />
+        <CardHead title="Akun iklan" hint="Jenis lini menentukan KPI, unit economics, & otonomi Autopilot." right={<button className="btn h-9 min-h-0" onClick={() => setAccModal("new")}><Plus size={15} /> Tambah</button>} />
         <ul className="space-y-2">
           {boot.accounts.map((a) => (
             <li key={a.id} className="flex items-center justify-between gap-3 rounded-xl border border-line px-3.5 py-2.5 text-[13px]">
-              <div className="min-w-0"><p className="truncate font-semibold">{a.name}</p><p className="truncate text-[12px] text-muted">{a.id} · {LINES[a.line].label} · sinkron {ago(a.lastSyncedAt)}</p></div>
-              <div className="flex shrink-0 items-center gap-1">
+              <div className="min-w-0">
+                <p className="truncate font-semibold">{a.name}</p>
+                <p className="truncate text-[12px] text-muted">{a.id} · {LINES[a.line].label} · sinkron {ago(a.lastSyncedAt)}</p>
+              </div>
+              <div className="flex shrink-0 items-center gap-1.5">
+                <span className={cx(
+                  "pill",
+                  a.botMode === "auto" ? "bg-green-soft text-green-ink" : a.botMode === "suggest" ? "bg-accent-soft text-accent" : "bg-bg text-muted",
+                )}>
+                  {a.botMode === "auto" ? "Full Auto" : a.botMode === "suggest" ? "Saran" : "Off"}
+                </span>
                 {!a.active && <span className="pill bg-bg text-muted">Nonaktif</span>}
                 <button className="btn btn-ghost size-9 p-0" onClick={() => setAccModal(a)} aria-label={`Ubah ${a.name}`}><Pencil size={15} /></button>
               </div>
@@ -136,7 +231,7 @@ export default function Pengaturan() {
       </Card>
 
       <Card>
-        <CardHead title="Produk & jasa" hint="Harga & HPP standar dipakai saat input penjualan jasa. Produk lynk.id dibuat otomatis." right={<button className="btn h-9 min-h-0" onClick={() => setProdModal("new")}><Plus size={15} /> Tambah</button>} />
+        <CardHead title="Produk & jasa" hint="Harga, HPP, & URL dipakai Autopilot untuk menghitung CPA impas dan membuat iklan." right={<button className="btn h-9 min-h-0" onClick={() => setProdModal("new")}><Plus size={15} /> Tambah</button>} />
         <ul className="max-h-[340px] space-y-1 overflow-y-auto">
           {boot.products.filter((p) => p.active).map((p) => (
             <li key={p.id} className="flex items-center justify-between gap-3 rounded-lg px-2 py-2 text-[13px] hover:bg-hover">
@@ -154,7 +249,7 @@ export default function Pengaturan() {
             <li key={c.id} className="flex items-center justify-between gap-3 py-2">
               <span>{c.name} <span className="text-muted">· {LINES[c.line].label}</span></span>
               <span className="flex items-center gap-1"><span className="num font-semibold">{rpk(c.monthly)}/bln</span>
-                <button className="btn btn-ghost size-8 min-h-0 p-0 text-muted hover:text-red" aria-label="Hapus" onClick={async () => {
+                <button className="btn btn-ghost size-8 min-h-0 p-0 text-muted hover:text-red" aria-label="Hentikan" onClick={async () => {
                   if (await confirmDialog({ title: "Hentikan biaya ini?", body: `${c.name} tidak dihitung lagi mulai hari ini.`, confirm: "Hentikan", danger: true }))
                     api(`/fixed-costs/${c.id}`, { method: "DELETE" }).then(() => { toast("Biaya dihentikan"); refreshData(); });
                 }}><Trash2 size={15} /></button>
@@ -163,7 +258,7 @@ export default function Pengaturan() {
           ))}
         </ul>
         <form className="grid gap-2 sm:grid-cols-[1fr_1.4fr_1fr_auto]" onSubmit={(e) => { e.preventDefault(); if (parseRp(fc.monthly)) addFc.mutate({ ...fc, monthly: parseRp(fc.monthly) }); }}>
-          <select className="input" value={fc.line} onChange={(e) => setFc({ ...fc, line: e.target.value })} aria-label="Lini"><option value="digital">Digital</option><option value="jasa">Jasa</option></select>
+          <CustomSelect value={fc.line} options={LINE_SHORT_OPTIONS} ariaLabel="Lini biaya tetap" onChange={(line) => setFc({ ...fc, line })} />
           <input className="input" placeholder="Langganan AI" value={fc.name} onChange={(e) => setFc({ ...fc, name: e.target.value })} required aria-label="Nama biaya" />
           <input className="input" placeholder="450rb / bulan" inputMode="decimal" value={fc.monthly} onChange={(e) => setFc({ ...fc, monthly: e.target.value })} required aria-label="Biaya per bulan" />
           <button className="btn btn-primary" disabled={addFc.isPending}><Plus size={15} /> Tambah</button>

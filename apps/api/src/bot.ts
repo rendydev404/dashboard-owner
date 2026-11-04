@@ -1,5 +1,5 @@
 // Bot AI: Claude + tool calling (streaming), dengan jawaban cadangan berbasis aturan kalau API key belum diisi.
-// Model hanya bisa MENGUSULKAN aksi kampanye; eksekusi lewat endpoint konfirmasi (lihat actions.ts).
+// Pause/scale kampanye selalu lewat kartu konfirmasi; peluncuran iklan boleh langsung dieksekusi kalau owner menyuruh (executeNow).
 import Anthropic from "@anthropic-ai/sdk";
 import {
   type ChatEvent, type User, PRESETS, LINES, fmtRange, rp, rpk, dec, pct, nf,
@@ -8,12 +8,13 @@ import { env, aiConfigured, aiMode } from "./env";
 import { sql, bumpDataVersion } from "./db";
 import { loadConfig, resolveRange, resolveScope, type Config } from "./scope";
 import * as Q from "./queries";
-import { createAddAdsAction, createCampaignAction, createLaunchAction, findCampaigns, logRuleChange, type CampaignAction } from "./actions";
+import { createAddAdsAction, createCampaignAction, createLaunchAction, executeNow, findCampaigns, logRuleChange, type CampaignAction } from "./actions";
 import { launchContext } from "./meta/launch";
 import { AD_PRESETS, adBreakdown, diagnose, placementBreakdown } from "./analysis";
 import { readMediaVision } from "./media";
 import { uploadAttachment } from "./meta/upload";
 import { createVideoAd } from "./creative";
+import { getAutopilotDashboard, runAutopilotCycle } from "./autopilot";
 import { errMsg, log } from "./log";
 import { summaryWidgets, campaignsWidget, hourlyWidget, productsWidget, plWidget } from "./chat-widgets";
 import { openChatSession, closeChatSession } from "./chat-sessions";
@@ -177,7 +178,7 @@ export const TOOLS: Anthropic.Tool[] = [
   },
   {
     name: "list_ad_accounts",
-    description: "Daftar akun iklan di dashboard (ID, nama, lini). WAJIB dipakai sebelum membuat iklan baru untuk MENANYAKAN ke user akun mana yang dipakai.",
+    description: "Daftar akun iklan aktif di dashboard (ID, nama, lini). Pakai untuk memilih akun iklan sesuai lini produk yang diiklankan.",
     input_schema: { type: "object", properties: {} },
   },
   {
@@ -218,17 +219,18 @@ export const TOOLS: Anthropic.Tool[] = [
   {
     name: "propose_launch",
     description:
-      "USULKAN kampanye baru terstruktur (1 Kampanye CBO → 1 Ad Set Broad/Advantage+ → 1 hingga 5 Kreatif/Iklan sekaligus) lengkap dengan Pre-Flight Specialist Audit. " +
-      "TIDAK membuat apa pun di Meta sampai user menekan 'Ya, eksekusi'. " +
+      "Buat kampanye baru terstruktur (1 Kampanye CBO → 1 Ad Set Broad/Advantage+ → 1 hingga 5 Kreatif/Iklan sekaligus) lengkap dengan Pre-Flight Specialist Audit. " +
+      "Dengan executeNow=true kampanye LANGSUNG dibuat & tayang di Meta (video yang masih diproses Meta ditunggu otomatis); tanpa itu hanya kartu usulan yang menunggu 'Ya, eksekusi'. " +
+      "Page/Instagram/Pixel, autoUtm, dan CTA yang cocok dengan tujuan diisi otomatis dari get_launch_context bila akun hanya punya satu. " +
       "Mendukung multi-variasi (isi array `ads` 2–5 item untuk menguji beberapa kreatif atau beberapa angle copy di dalam 1 ad set CBO yang sama tanpa memecah budget) " +
-      "maupun 1 iklan tunggal (`ads:[...]` atau `creative` + `adName`). Panggil hanya setelah akun, budget harian, tujuan/produk, dan kreatif pasti.",
+      "maupun 1 iklan tunggal (`ads:[...]` atau `creative` + `adName`). Panggil setelah get_launch_context & media diupload.",
     input_schema: {
       type: "object",
       properties: {
         accountId: { type: "string", description: "ID akun yang DIPILIH USER" },
         campaignName: { type: "string", description: "Format: [Tujuan] - [Produk/Angle] - [Tanggal], mis. 'Penjualan - Timelapse AI - 26 Okt'" },
         objective: { type: "string", enum: ["sales", "leads_website", "leads_whatsapp", "traffic"], description: "sales = pembelian di website (pixel PURCHASE); leads_website = prospek di website (pixel LEAD); leads_whatsapp = chat WhatsApp; traffic = kunjungan landing page" },
-        dailyBudget: { type: "integer", description: "Budget harian kampanye dalam Rupiah (bulat). Harus sesuai yang user sebut/setujui." },
+        dailyBudget: { type: "integer", description: "Budget harian kampanye dalam Rupiah (bulat). Pakai angka owner kalau disebut; kalau tidak, tentukan sendiri dari budgetGuide get_launch_context. Tidak ada batas atas kecuali owner mengatur maxDailyBudget." },
         pageId: { type: "string" },
         instagramUserId: { type: "string", description: "Opsional, supaya tayang di Instagram atas nama akun IG brand" },
         pixelId: { type: "string", description: "Wajib untuk sales & leads_website" },
@@ -251,17 +253,22 @@ export const TOOLS: Anthropic.Tool[] = [
         },
         creative: creativeSchemaProp,
         adName: { type: "string", description: "Nama iklan (dipakai jika tidak mengirim array `ads`)" },
-        startNow: { type: "boolean", description: "true = langsung tayang setelah dikonfirmasi (default); false = simpan sebagai draft di Ads Manager" },
+        startNow: { type: "boolean", description: "true = langsung tayang setelah dibuat (default); false = simpan sebagai draft di Ads Manager" },
+        executeNow: {
+          type: "boolean",
+          description: "true = LANGSUNG buat & tayangkan di Meta tanpa menunggu klik konfirmasi (pakai saat owner menyuruh iklankan/pasang/tayangkan). " +
+            "false/kosong = hanya kartu usulan yang menunggu 'Ya, eksekusi' (pakai saat owner minta lihat/review rencana dulu).",
+        },
         rationale: { type: "string", description: "Alasan strategi media buying, pemilihan angle, & hitungan unit economics (ditampilkan di kartu)" },
       },
-      required: ["accountId", "campaignName", "objective", "dailyBudget", "pageId"],
+      required: ["accountId", "campaignName", "objective", "dailyBudget"],
     },
   },
   {
     name: "propose_add_ads",
     description:
-      "USULKAN penambahan 1–5 iklan/kreatif baru langsung ke dalam kampanye & ad set yang SUDAH ADA (mis. menyegarkan kampanye pemenang yang mulai creative fatigue, " +
-      "atau menguji kreatif/angle baru tanpa membuat kampanye baru yang memecah budget & mereset learning phase). TIDAK membuat apa pun di Meta sampai user mengonfirmasi.",
+      "Tambah 1–5 iklan/kreatif baru langsung ke dalam kampanye & ad set yang SUDAH ADA (mis. menyegarkan kampanye pemenang yang mulai creative fatigue, " +
+      "atau menguji kreatif/angle baru tanpa membuat kampanye baru yang memecah budget & mereset learning phase). executeNow=true langsung membuat & mengaktifkan iklannya; tanpa itu hanya kartu usulan.",
     input_schema: {
       type: "object",
       properties: {
@@ -280,18 +287,23 @@ export const TOOLS: Anthropic.Tool[] = [
           description: "1–5 variasi iklan baru yang akan disuntikkan ke ad set tujuan",
           items: adItemSchemaProp,
         },
-        startNow: { type: "boolean", description: "true = langsung aktifkan iklan baru setelah dikonfirmasi (default); false = simpan draft di ad set" },
+        startNow: { type: "boolean", description: "true = langsung aktifkan iklan baru setelah dibuat (default); false = simpan draft di ad set" },
+        executeNow: {
+          type: "boolean",
+          description: "true = LANGSUNG buat & tayangkan di Meta tanpa menunggu klik konfirmasi (pakai saat owner menyuruh iklankan/pasang/tayangkan). " +
+            "false/kosong = hanya kartu usulan yang menunggu 'Ya, eksekusi' (pakai saat owner minta lihat/review rencana dulu).",
+        },
         rationale: { type: "string", description: "Alasan injeksi ke kampanye ini & perbedaan angle dibanding iklan lama" },
       },
-      required: ["accountId", "campaignId", "objective", "pageId", "ads"],
+      required: ["accountId", "campaignId", "objective", "ads"],
     },
   },
   {
     name: "create_video_ad",
     description:
       "BUAT video iklan 9:16 (suara narasi + subtitle + teks animasi + harga + CTA) dari foto/video lampiran user, SEKALIGUS rencana kampanyenya. " +
-      "Video dirender di server (±2–3 menit) lalu tampil sebagai kartu pratinjau di chat. TIDAK ada yang dikirim ke Meta sampai user menonton " +
-      "dan menekan 'Setujui & iklankan'; setelah itu sistem mengupload video dan membuat + menayangkan kampanye sesuai rencana di sini. " +
+      "Video dirender di server (±2–3 menit) lalu tampil sebagai kartu pratinjau di chat. Dengan executeNow=true video yang lolos QC langsung diupload & kampanyenya tayang " +
+      "tanpa menunggu persetujuan; tanpa itu owner menonton dulu dan menekan 'Setujui & iklankan'. " +
       "Panggil hanya setelah akun, produk, tujuan, dan budget harian jelas, dan setelah get_launch_context (untuk Page, pixel, link, harga produk).",
     input_schema: {
       type: "object",
@@ -312,7 +324,7 @@ export const TOOLS: Anthropic.Tool[] = [
           properties: {
             campaignName: { type: "string" },
             objective: { type: "string", enum: ["sales", "leads_website", "leads_whatsapp", "traffic"] },
-            dailyBudget: { type: "integer", description: "Rupiah/hari, sesuai yang user sebut" },
+            dailyBudget: { type: "integer", description: "Rupiah/hari: angka owner kalau disebut, kalau tidak dari budgetGuide get_launch_context" },
             pageId: { type: "string" }, instagramUserId: { type: "string" }, pixelId: { type: "string" }, linkUrl: { type: "string" },
             targeting: { type: "object", properties: { countries: { type: "array", items: { type: "string" } }, ageMin: { type: "integer" }, ageMax: { type: "integer" }, genders: { type: "string", enum: ["all", "male", "female"] } } },
             primaryText: { type: "string", description: "Teks utama iklan di atas video" },
@@ -325,8 +337,45 @@ export const TOOLS: Anthropic.Tool[] = [
           },
           required: ["campaignName", "objective", "dailyBudget", "pageId", "primaryText", "headline", "adName"],
         },
+        executeNow: { type: "boolean", description: "true = begitu render lolos QC, video langsung diiklankan tanpa menunggu tombol 'Setujui & iklankan' (pakai saat owner menyuruh langsung iklankan)" },
       },
       required: ["accountId", "hook", "cta", "script", "mediaIds", "campaign"],
+    },
+  },
+  {
+    name: "get_autopilot_status",
+    description:
+      "Cek status Autopilot Profit Engine: mode otonomi per akun (off/suggest/auto), guardrail keselamatan (stop-loss harian, plafon budget harian akun, cooldown, circuit breaker), " +
+      "snapshot Laba Bersih & ROAS riil, unit economics & jumlah aset tiap produk, riwayat siklus keputusan AI (agent_runs), dan memori eksperimen angle (winning/losing/testing).",
+    input_schema: { type: "object", properties: { account: accountProp } },
+  },
+  {
+    name: "run_autopilot_now",
+    description:
+      "JALANKAN satu siklus evaluasi & optimasi Autopilot Profit Engine sekarang juga (hitung P&L + unit economics -> diagnosa kampanye & iklan boncos -> eksekusi/usulkan pause, scale, " +
+      "dan peluncuran iklan pengganti ber-angle baru sampai untung sesuai mode otonomi akun).",
+    input_schema: {
+      type: "object",
+      properties: { account_id: { type: "string", description: "ID akun spesifik, atau kosongkan untuk menjalankan pada semua akun aktif." } },
+    },
+  },
+  {
+    name: "configure_autopilot",
+    description:
+      "Ubah pengaturan otonomi & guardrail keselamatan Autopilot pada akun iklan: botMode ('off'|'suggest'|'auto'), dailyStopLoss (Rp), maxAccountDailyBudget (Rp), " +
+      "cooldownHours (jam), maxAutoLaunchesPerDay (jumlah), autoLaunchEnabled (boolean).",
+    input_schema: {
+      type: "object",
+      properties: {
+        account_id: { type: "string", description: "ID akun iklan" },
+        botMode: { type: "string", enum: ["off", "suggest", "auto"] },
+        dailyStopLoss: { type: ["number", "null"], description: "Batas rugi bersih harian sebelum peluncuran/scale ditahan (Rp, null = tanpa batas)" },
+        maxAccountDailyBudget: { type: ["number", "null"], description: "Plafon total budget harian seluruh kampanye aktif di akun ini (Rp, null = tanpa batas)" },
+        cooldownHours: { type: "number", description: "Jeda minimal antar aksi pada kampanye yang sama (0-72 jam)" },
+        maxAutoLaunchesPerDay: { type: "number", description: "Batas maksimal peluncuran/injeksi iklan baru otomatis per hari (0-10)" },
+        autoLaunchEnabled: { type: "boolean", description: "Izinkan AI meluncurkan/menyuntikkan iklan pengganti saat iklan lama merugi" },
+      },
+      required: ["account_id"],
     },
   },
 ];
@@ -521,35 +570,97 @@ export async function runTool(name: string, input: any, ctx: ChatContext, user: 
       if (!acc) return { error: "Akun iklan tidak terdaftar atau tidak aktif. Tanyakan akun mana (list_ad_accounts)." };
       return { account: acc.name, ...(await uploadAttachment(String(input.media_id ?? ""), user.id, acc.id)) };
     }
-    case "propose_launch": {
-      if (user.role !== "owner") return { error: "Hanya owner yang boleh membuat iklan" };
-      const action = await createLaunchAction(input, user.id, input.rationale);
-      emit({ type: "action_card", action });
-      const audit = (action.params as any)?.audit ?? [];
-      return {
-        ok: true, pendingActionId: action.id, audit,
-        note: "Kartu rencana kampanye sudah tampil beserta hasil Pre-Flight Audit. Iklan BELUM dibuat. Sampaikan ringkasan strategi, unit economics, dan peringatan audit (jika ada level 'warn'), lalu minta user menekan 'Ya, eksekusi'. Jangan bilang iklan sudah tayang.",
-      };
-    }
+    case "propose_launch":
     case "propose_add_ads": {
       if (user.role !== "owner") return { error: "Hanya owner yang boleh membuat iklan" };
-      const action = await createAddAdsAction(input, user.id, input.rationale);
+      const direct = input.executeNow === true;
+      const action = name === "propose_launch"
+        ? await createLaunchAction(input, user.id, input.rationale, "chat", { autoExecute: direct })
+        : await createAddAdsAction(input, user.id, input.rationale, "chat", { autoExecute: direct });
       emit({ type: "action_card", action });
       const p = action.params as any;
+      const info = name === "propose_launch" ? {} : { campaignName: p.campaignName, adsetId: p.adsetId, adsetName: p.adsetName };
+      if (!direct) {
+        return {
+          ok: true, pendingActionId: action.id, ...info, audit: p.audit ?? [],
+          note: "Kartu rencana sudah tampil beserta Pre-Flight Audit. Iklan BELUM dibuat. Sampaikan ringkasan strategi, unit economics, dan peringatan audit (jika ada level 'warn'), lalu minta user menekan 'Ya, eksekusi'. Jangan bilang iklan sudah tayang.",
+        };
+      }
+      const done = await executeNow(action.id);
+      const res = (done.params as any)?.result;
       return {
-        ok: true, pendingActionId: action.id, campaignName: p.campaignName, adsetId: p.adsetId, adsetName: p.adsetName, audit: p.audit ?? [],
-        note: "Kartu penambahan iklan baru ke kampanye eksisting sudah tampil. Iklan BELUM dibuat di Meta sampai user menekan 'Ya, eksekusi'.",
+        ok: done.status === "executed", actionId: done.id, status: done.status, ...info, audit: p.audit ?? [],
+        campaignId: done.campaignId ?? res?.campaignId ?? null, adIds: res?.adIds ?? [], published: res?.published ?? false, error: done.error,
+        note: done.status === "executed"
+          ? (res?.published ? "Iklan SUDAH dibuat dan tayang di Meta (review iklan oleh Meta biasanya beberapa menit). " : "Iklan sudah dibuat sebagai draft di Ads Manager. ") +
+            "Sampaikan ringkas: struktur, budget, angle tiap variasi, hitungan unit economics, metrik yang dipantau 48–72 jam pertama, dan bahwa owner bisa menekan tombol pause di kartu bila perlu."
+          : done.status === "pending"
+            ? "Iklan sedang dibuat di latar belakang (biasanya menunggu Meta selesai memproses video). Kartu akan berubah sendiri jadi 'Berhasil' atau menampilkan error. Jangan bilang sudah tayang."
+            : "Peluncuran GAGAL. Jelaskan error ini ke owner dengan bahasa sederhana, perbaiki rencananya (budget, link, aset, CTA) lalu coba lagi bila penyebabnya ada di rencana.",
       };
     }
     case "create_video_ad": {
       if (user.role !== "owner") return { error: "Hanya owner yang boleh membuat iklan" };
-      const { runId } = await createVideoAd(input, user.id);
+      const direct = input.executeNow === true;
+      const { runId } = await createVideoAd(input, user.id, { autoApprove: direct });
       emit({ type: "video_card", runId });
       return {
         ok: true, runId,
-        note: "Kartu video sudah tampil dan sedang dirender (±2–3 menit). Video BELUM dikirim ke Meta. Bilang ke user: tonton dulu di kartu, " +
-          "lalu tekan 'Setujui & iklankan' kalau sudah oke (kampanye dibuat & tayang sesuai rencana), atau 'Buang' lalu minta revisi. Jangan bilang iklan sudah tayang.",
+        note: direct
+          ? "Kartu video sudah tampil dan sedang dirender (±2–3 menit). Begitu lolos QC, video otomatis diupload ke Meta dan kampanyenya langsung tayang; progresnya terlihat di kartu. " +
+            "Kalau QC gagal, video menunggu review owner. Jangan bilang sudah tayang sebelum kartu menunjukkannya."
+          : "Kartu video sudah tampil dan sedang dirender (±2–3 menit). Video BELUM dikirim ke Meta. Bilang ke user: tonton dulu di kartu, " +
+            "lalu tekan 'Setujui & iklankan' kalau sudah oke (kampanye dibuat & tayang sesuai rencana), atau 'Buang' lalu minta revisi. Jangan bilang iklan sudah tayang.",
       };
+    }
+    case "get_autopilot_status": {
+      const d = await getAutopilotDashboard(input.account || ctx.acc);
+      return {
+        accounts: d.accounts.map((x) => ({
+          id: x.account.id, name: x.account.name, line: x.account.line, botMode: x.account.botMode,
+          settings: x.account.settings, pl: x.pl, activeCampaigns: x.activeCampaigns,
+          launchesToday: x.launchesToday, stopLossTriggered: x.stopLossTriggered, rejectionCircuitOpen: x.rejectionCircuitOpen,
+          lastRunAt: x.lastRunAt, lastRunStatus: x.lastRunStatus,
+        })),
+        products: d.products.slice(0, 15),
+        assetCount: d.assets.length,
+        recentRuns: d.runs.slice(0, 5),
+        memories: d.memories.slice(0, 12),
+      };
+    }
+    case "run_autopilot_now": {
+      if (user.role !== "owner") return { error: "Hanya owner yang boleh menjalankan siklus Autopilot" };
+      const accountId = input.account_id ? String(input.account_id) : (ctx.acc !== "all" && ctx.acc !== "digital" && ctx.acc !== "jasa" ? ctx.acc : undefined);
+      const res = await runAutopilotCycle("chat", { accountId, userId: user.id });
+      if (res.skippedLock) return { ok: false, note: "Siklus Autopilot lain sedang berjalan, tunggu beberapa detik lalu cek hasilnya." };
+      return {
+        ok: true,
+        runs: res.runs.map((r) => ({
+          id: r.id, account: r.accountName, mode: r.mode, brain: r.brain, status: r.status,
+          plSnapshot: r.plSnapshot, diagnosis: r.diagnosis, decisions: r.decisions, guardrailNote: r.guardrailNote,
+        })),
+      };
+    }
+    case "configure_autopilot": {
+      if (user.role !== "owner") return { error: "Hanya owner yang boleh mengubah konfigurasi Autopilot" };
+      const id = String(input.account_id ?? "");
+      const acc = cfg.accounts.find((a) => a.id === id);
+      if (!acc) return { error: "Akun iklan tidak ditemukan." };
+      if (input.botMode) {
+        await sql`UPDATE ad_accounts SET bot_mode = ${String(input.botMode)}::bot_mode WHERE id = ${id}`;
+      }
+      await sql`
+        UPDATE account_settings SET
+          daily_stop_loss = ${input.dailyStopLoss === undefined ? sql`daily_stop_loss` : input.dailyStopLoss},
+          max_account_daily_budget = ${input.maxAccountDailyBudget === undefined ? sql`max_account_daily_budget` : input.maxAccountDailyBudget},
+          cooldown_hours = COALESCE(${input.cooldownHours != null ? Math.round(Number(input.cooldownHours)) : null}, cooldown_hours),
+          max_auto_launches_per_day = COALESCE(${input.maxAutoLaunchesPerDay != null ? Math.round(Number(input.maxAutoLaunchesPerDay)) : null}, max_auto_launches_per_day),
+          auto_launch_enabled = COALESCE(${typeof input.autoLaunchEnabled === "boolean" ? input.autoLaunchEnabled : null}, auto_launch_enabled),
+          updated_at = now(), updated_by = ${user.id}
+        WHERE account_id = ${id}`;
+      await bumpDataVersion();
+      emit({ type: "rule_changed", accountId: id });
+      return { ok: true, account: acc.name };
     }
   }
   return { error: "Tool tidak dikenal" };
@@ -560,7 +671,7 @@ export async function runTool(name: string, input: any, ctx: ChatContext, user: 
 function systemPrompt(cfg: Config) {
   const rules = cfg.accounts.map((a) => {
     const s = a.settings;
-    return `- ${a.name} (ID ${a.id}, ${LINES[a.line].label}): target ROAS ${s.targetRoas}x, ${a.line === "jasa" ? `batas CPL ${rp(s.maxCpl ?? 0)}` : `batas CPA ${rp(s.maxCpa ?? 0)}`}, matikan setelah spend ${rp(s.killAfterSpend)}, scale +${s.scaleStepPct}%, PPN iklan ${s.adTaxPct}%`;
+    return `- ${a.name} (ID ${a.id}, ${LINES[a.line].label}, mode=${a.botMode}): target ROAS ${s.targetRoas}x, ${a.line === "jasa" ? `batas CPL ${rp(s.maxCpl ?? 0)}` : `batas CPA ${rp(s.maxCpa ?? 0)}`}, matikan setelah spend ${rp(s.killAfterSpend)}, scale +${s.scaleStepPct}%, stop-loss harian ${s.dailyStopLoss ? rp(s.dailyStopLoss) : "tanpa batas"}, cooldown ${s.cooldownHours}j, auto-launch ${s.autoLaunchEnabled ? `aktif (maks ${s.maxAutoLaunchesPerDay}/hari)` : "nonaktif"}, PPN iklan ${s.adTaxPct}%`;
   }).join("\n");
   return `Kamu "Bot Iklan": konsultan performance marketing senior, Direct-Response Creative Strategist, & Meta Ads Specialist kelas atas (10+ tahun, kelola ratusan miliar spend direct response di Indonesia) untuk owner bisnis Produk Digital AI (jualan otomatis di lynk.id) dan Jasa AI (closing manual lewat WhatsApp).
 Kamu dibayar untuk keputusan yang menghasilkan laba bersih nyata, bukan sekadar metrik vanity atau laporan angka. Berpikir seperti media buyer elit + creative director + analis unit economics sekaligus: tajam, jujur, berbasis data, patuh kebijakan Meta, tegas memberi rekomendasi, dan selalu menjelaskan "kenapa".
@@ -598,25 +709,35 @@ HARNESS SPESIALIS PEMBUATAN IKLAN META (ERA ALGORITMA ANDROMEDA)
 
 Di era Meta Andromeda, **kreatif adalah targeting**: algoritma membaca teks, visual, dan pola interaksi tiap iklan untuk mencari pembeli yang tepat. Tugasmu bukan sekadar "mengisi form iklan", melainkan merancang mesin konversi yang menguntungkan sejak hari pertama.
 
+Mandat Eksekusi (PENTING): owner ingin kamu bekerja seperti media buyer yang diberi kepercayaan penuh, BUKAN asisten yang terus bertanya.
+- Begitu owner melampirkan foto/video dan menyuruh mengiklankan (mis. "iklanin", "pasang iklan", "bikin iklan", "tayangkan", atau lampiran tanpa instruksi lain), kerjakan SAMPAI TAYANG dalam satu giliran: inspect_media → get_launch_context → upload_media_to_meta → propose_launch/propose_add_ads dengan **executeNow: true**.
+- Ambil sendiri semua keputusan best practice yang datanya tersedia (akun, tujuan, produk, budget, struktur, angle, copy, CTA, targeting). Sebut keputusanmu + alasannya singkat di jawaban, jangan minta persetujuan satu per satu.
+- Bertanya HANYA bila benar-benar tidak bisa diputuskan dari data: ada beberapa akun di lini yang sama dan tidak jelas mana, ada beberapa Page/Pixel, produk yang diiklankan tidak bisa dikenali dari visual/pesan, atau landing page produk belum ada. Tanyakan semuanya sekaligus dalam 1 pesan.
+- executeNow: false (kartu usulan) hanya bila owner minta "lihat dulu", "review dulu", "usulkan", "draft", atau sejenisnya.
+- Tidak ada batas atas budget dari dashboard (kecuali owner sendiri mengisi maxDailyBudget di Pengaturan). Jangan memangkas budget karena takut; pilih budget yang paling mungkin menghasilkan laba bersih terbesar berdasarkan budgetGuide & data akun.
+
 Alur Wajib Membuat / Menambah Iklan (JANGAN LONCAT):
 1. **Inspeksi Visual Lebih Dulu (WAJIB bila ada lampiran)**:
    - Setiap kali pesan user memuat "[Lampiran foto|video · media_id=…]", panggil **inspect_media** SEBELUM upload_media_to_meta (karena upload ke Meta akan menghapus file sementara di server) dan SEBELUM menulis copy.
    - Lihat isi gambar/cover video secara nyata: baca headline di poster, warna, ekspresi/objek, bukti hasil, serta cek apakah ada teks penting yang rawan tertutup UI Reels/Stories (14% atas & 35% bawah). Beri review jujur 2–3 poin ke user (apa yang sudah kuat di visualnya dan apa yang perlu diperkuat lewat copy).
-2. **Pastikan Akun & Parameter Inti**:
-   - Kalau user belum menunjuk akun secara eksplisit, panggil list_ad_accounts lalu TANYA akun mana. Dilarang memilih akun sendiri.
-   - Pastikan jelas: produk/jasa yang dijual, tujuan optimasi, dan budget HARIAN (Rupiah). Bila ada yang belum disebut user, tanyakan sekaligus dengan ringkas beserta rekomendasi angka berbasis unit economics (jangan mengarang budget).
+2. **Tentukan Akun & Parameter Inti Sendiri**:
+   - Akun: pakai akun yang owner sebut, atau akun yang sedang dibuka di dashboard bila itu satu akun. Kalau tidak, cocokkan lini produk (Produk Digital AI vs Jasa AI, lihat aturan akun di bawah) dan pilih akun aktif di lini itu; tanya hanya kalau ada >1 akun di lini yang sama.
+   - Tujuan: Produk Digital AI → sales (pixel PURCHASE, CTA SHOP_NOW/GET_OFFER); Jasa AI → leads_whatsapp (CTA WHATSAPP_MESSAGE). Pakai leads_website/traffic hanya bila owner minta atau pixel belum ada.
+   - Produk: kenali dari teks di visual & pesan owner, cocokkan ke products di get_launch_context (nama, harga, URL). Bila ragu antara 2 produk, pilih yang paling cocok dengan visual dan sebutkan.
+   - Budget HARIAN: angka owner bila disebut. Bila tidak, ambil dari budgetGuide get_launch_context: recommended (testing3Variations untuk 3 angle, testing5Variations untuk 5 iklan, learningPhaseExit bila accountProven = true). Bulatkan ke kelipatan Rp5 rb.
 3. **Bedah Dossier Akun (get_launch_context)**:
    - Wajib panggil get_launch_context(account_id). Pelajari sekaligus:
      a) products: harga jual, profitBeforeAds (margin bersih per order sebelum iklan), maxBreakEvenCpa (batas CPA impas setelah PPN iklan), dan breakEvenRoas. Cocokkan harga & URL persis dari sini!
      b) winningAds30d & bleedingAds30d: pelajari pola nama/angle kreatif yang terbukti menghasilkan CPA/CPL termurah di akun ini, dan hindari mengulang pola iklan yang boncos tanpa hasil.
      c) activeAdsets & topCampaigns30d: cek apakah sudah ada kampanye aktif untuk produk/tujuan yang sama.
-     d) unitEconomics30d & bestHours30d: cek recommendedTestingDailyBudget (≈ 2× target CPA) dan jam konversi terbaik.
+     d) budgetGuide, unitEconomics30d & bestHours30d: budget testing per jumlah variasi, budget keluar learning phase (~50 konversi/7 hari), dan jam konversi terbaik.
+     e) pages, instagramAccounts, pixels: Page/IG/Pixel diisi otomatis kalau akun hanya punya satu; kalau lebih, pilih yang dipakai iklan pemenang atau yang namanya cocok dengan brand.
 4. **Pilih Arsitektur Kampanye yang Tepat (Konsolidasi vs Injeksi)**:
    - **Opsi A — Kampanye Baru (propose_launch)**: Gunakan 1 Kampanye CBO (LOWEST_COST_WITHOUT_CAP) + 1 Ad Set Broad/Advantage+ Audience & Placements (negara ID, usia 18–65 kecuali produk spesifik menuntut rentang usia/gender tertentu; dilarang mengarang interest sempit). Aktifkan autoUtm: true untuk semua iklan website (sales, leads_website, traffic).
-   - **Opsi B — Suntik ke Kampanye Pemenang (propose_add_ads)**: Jika di akun sudah ada kampanye aktif dengan tujuan & produk yang sama yang sedang jalan (atau mulai creative fatigue) dan user ingin menambah materi kreatif baru tanpa menambah budget kampanye baru, sarankan propose_add_ads ke kampanye/ad set aktif tersebut agar budget tidak terpecah dan histori optimasi terjaga.
+   - **Opsi B — Suntik ke Kampanye Pemenang (propose_add_ads)**: Jika di akun sudah ada kampanye aktif dengan tujuan & produk yang sama yang profitable atau mulai creative fatigue, PILIH propose_add_ads ke ad set aktif tersebut (budget tidak terpecah, histori optimasi terjaga). Kampanye baru dipakai bila belum ada kampanye aktif untuk produk itu atau kampanye yang ada merugi.
    - **Strategi Multi-Variasi (ads 2–5 item dalam 1 Ad Set)**:
      - Bila user melampirkan 2–5 foto/video kreatif (dan bukan meminta render 1 video gabungan): gabungkan semuanya dalam 1 ad set CBO (ads: [...]), JANGAN pecah jadi banyak kampanye/ad set.
-     - Bila user hanya melampirkan 1 foto/video dan budget harian ≥ 1,5–2× target CPA: rekomendasikan (atau langsung susun dalam ads: [...] memakai imageHash/videoId yang sama) **2–3 variasi sudut pandang copy (A/B Angle Testing)** agar algoritma Meta menguji pesan mana yang menghasilkan CTR & CVR tertinggi:
+     - Bila user hanya melampirkan 1 foto/video: langsung susun **3 variasi sudut pandang copy (A/B Angle Testing)** dalam ads: [...] memakai imageHash/videoId yang sama (budget mengikuti budgetGuide.testing3Variations) agar algoritma Meta menguji pesan mana yang menghasilkan CTR & CVR tertinggi:
        * **Angle 1 (Pain-Agitation-Solution)**: tembak masalah/kebocoran waktu atau biaya paling menyakitkan → perlihatkan konsekuensinya → hadirkan produk sebagai jalan pintas logis.
        * **Angle 2 (Outcome & Mekanisme Konkret)**: buka dengan hasil spesifik & kecepatan kerja (mis. dari 3 jam jadi 10 menit) → jelaskan isi/cara kerjanya yang praktis → bukti/angka nyata.
        * **Angle 3 (Direct Offer / Value Stack)**: langsung ke nilai paket lengkap vs harganya yang jauh lebih hemat dibanding cara manual/kompetitor → hilangkan keraguan teknis → ajakan bertindak.
@@ -630,17 +751,22 @@ Alur Wajib Membuat / Menambah Iklan (JANGAN LONCAT):
    - **Headline Mobile (≤ 40 karakter)**: Wajib padat ≤ 40 karakter agar tidak terpotong "..." di HP. Isi dengan proposisi nilai terkuat + pemicu aksi (mis. "Akses Instan Paket Prompt AI — Rp49rb" atau "Jasa Video Promosi AI Siap Pakai").
 6. **Audit Kepatuhan Kebijakan Meta Ads & Unit Economics Sebelum Propose**:
    - **Anti-Reject / Anti-Restrict**: DILARANG menunjuk kondisi pribadi/keuangan/fisik audiens secara langsung (Personal Attributes: contoh terlarang "Buat kamu yang lagi boncos/miskin/nganggur/gemuk"). Ubah ke fokus masalah objektif ("Banyak pengiklan pemula membakar budget di minggu pertama karena..."). DILARANG menjanjikan penghasilan/keuntungan pasti ("dijamin cuan", "auto kaya", "pasti balik modal 100%").
-   - Upload media lewat upload_media_to_meta(media_id, account_id) setelah akun dikonfirmasi dan setelah inspect_media.
-   - Panggil propose_launch atau propose_add_ads. Periksa field audit pada hasil tool; sampaikan ke user hitungan singkat: **Harga produk → Margin sebelum iklan → Batas CPA Impas → Target CPA/ROAS → Estimasi konversi harian dari budget yang dipilih**, lalu arahkan user memeriksa kartu konfirmasi dan menekan **"Ya, eksekusi sekarang"**. JANGAN pernah mengklaim iklan sudah tayang sebelum user mengonfirmasi kartu.
+   - Upload media lewat upload_media_to_meta(media_id, account_id) setelah akun ditentukan dan setelah inspect_media.
+   - Sebelum memanggil tool, cek sendiri copy-mu terhadap aturan di atas (hook 125 karakter, headline ≤ 40, tanpa klaim terlarang). Bila tool mengembalikan error validasi, PERBAIKI rencananya dan panggil lagi (jangan lempar error mentah ke owner).
+   - Panggil propose_launch atau propose_add_ads (executeNow: true sesuai Mandat Eksekusi). Sampaikan hasil berdasarkan field status/published di hasil tool: **Harga produk → Margin sebelum iklan → Batas CPA Impas → Budget & alasannya → Estimasi konversi harian**, angle tiap variasi, dan metrik yang dipantau 48–72 jam pertama. Klaim "sudah tayang" HANYA bila hasil tool menyatakan published; bila status pending, bilang sedang diproses dan kartu akan berubah sendiri.
 
 Membuat VIDEO Iklan Render Server (user meminta "bikinin video", "buatkan video iklan", dsb.):
 - Butuh minimal 1 foto/video lampiran sebagai bahan visual. Bila belum ada, minta user melampirkan 1–6 foto/video.
 - Panggil inspect_media dulu untuk melihat urutan adegan visual terbaik dari lampiran user, lalu jalankan pemeriksaan akun & get_launch_context.
 - Susun: hook ≤ 40 karakter, 0–3 bullets ≤ 30 karakter, script voice over 15–30 detik (±40–75 kata, alur Hook → Mekanisme/Manfaat → Bukti → CTA, semua angka ditulis dengan huruf agar pelafalan TTS mulus), priceBadge (HANYA dari harga asli di get_launch_context), serta copy kampanye Meta (primaryText, headline ≤ 40 karakter, metaCta).
-- Panggil create_video_ad sekali (jangan panggil upload_media_to_meta / propose_launch manual untuk alur ini). Minta user menonton pratinjau video di kartu lalu menekan **"Setujui & iklankan"**.
+- Panggil create_video_ad sekali (jangan panggil upload_media_to_meta / propose_launch manual untuk alur ini). Bila owner menyuruh langsung iklankan, isi executeNow: true (video yang lolos QC langsung tayang); kalau tidak, minta owner menonton pratinjau lalu menekan **"Setujui & iklankan"**.
 
-Kontrol Kampanye Eksisting:
-- Pause / aktifkan / scale: panggil propose_campaign_action (hanya menampilkan kartu konfirmasi). Scale vertikal ideal 20–30% per 2–3 hari pada kampanye yang sudah stabil di atas target ROAS / di bawah batas CPA.
+Kontrol Kampanye Eksisting & Autopilot Profit Engine:
+- Pause / aktifkan / scale manual dari chat: panggil propose_campaign_action (menampilkan kartu konfirmasi). Scale vertikal ideal 20–30% per 2–3 hari pada kampanye stabil di atas target ROAS / di bawah batas CPA.
+- **Autopilot Profit Engine**: Dashboard ini dilengkapi mesin otonom yang berjalan otomatis setelah sinkronisasi Meta (untuk akun mode 'suggest' atau 'auto') maupun atas perintah langsung:
+  * Gunakan **get_autopilot_status** saat user bertanya soal status autopilot, alasan keputusan otomatis terakhir, sisa plafon stop-loss, jumlah aset di Bank Aset Produk, atau memori eksperimen angle mana yang menang/kalah.
+  * Gunakan **run_autopilot_now** saat user meminta AI langsung mengevaluasi & mengeksekusi perbaikan kerugian / push profit sekarang juga (pada akun mode 'auto' aksi langsung dieksekusi di bawah guardrail; pada mode 'suggest' menjadi usulan pending).
+  * Gunakan **configure_autopilot** bila owner meminta mengubah mode otonomi ('off' / 'suggest' / 'auto'), batas stop-loss harian, plafon budget harian akun, cooldown, atau saklar auto-launch.
 - Pindah tampilan periode/akun: panggil set_view.
 - Akhiri jawaban dengan maksimal 1 tawaran langkah lanjut yang tajam dan bernilai tinggi.
 
@@ -723,7 +849,7 @@ async function chatViaBridge(message: string, history: { role: "user" | "assista
       method: "POST",
       headers: { Authorization: `Bearer ${env.CLAUDE_BRIDGE_TOKEN}`, "Content-Type": "application/json" },
       body: JSON.stringify({ model: env.CLAUDE_MODEL, system: systemPrompt(cfg), prompt, mcpUrl: env.CLAUDE_MCP_URL, mcpToken: token }),
-      signal: AbortSignal.timeout(180_000),
+      signal: AbortSignal.timeout(310_000),
     });
     if (res.status === 429) throw new Error("Bot sedang melayani pertanyaan lain, coba lagi beberapa detik lagi.");
     if (!res.ok || !res.body) throw new Error(`Jembatan Claude menolak (HTTP ${res.status})`);

@@ -240,3 +240,37 @@ describe("multi-iklan CBO, injeksi kampanye eksisting, UTM, & pre-flight audit",
     expect(clean.every((x) => x.level === "ok")).toBe(true);
   });
 });
+
+describe("default best practice sebelum validasi", () => {
+  it("CTA disesuaikan dengan tujuan, autoUtm aktif untuk iklan website, input lain tidak diubah", async () => {
+    const { applyLaunchDefaults } = await import("../src/meta/launch");
+    const wa = applyLaunchDefaults({
+      accountId: "1", objective: "leads_whatsapp",
+      ads: [{ adName: "A", creative: { type: "new", imageHash: "h", primaryText: "x", headline: "y", cta: "SHOP_NOW" } }],
+    }) as any;
+    expect(wa.ads[0].creative.cta).toBe("WHATSAPP_MESSAGE");
+    expect(wa.autoUtm).toBeUndefined();
+
+    const sales = applyLaunchDefaults({
+      accountId: "1", objective: "sales",
+      creative: { type: "new", imageHash: "h", primaryText: "x", headline: "y", cta: "WHATSAPP_MESSAGE" },
+      ads: [{ adName: "B", creative: { type: "new", imageHash: "h", primaryText: "x", headline: "y" } }, { adName: "C", creative: { type: "existing", creativeId: "9" } }],
+    }) as any;
+    expect(sales.creative.cta).toBe("SHOP_NOW");
+    expect(sales.ads[0].creative.cta).toBe("SHOP_NOW");
+    expect(sales.ads[1].creative).toEqual({ type: "existing", creativeId: "9" });
+    expect(sales.autoUtm).toBe(true);
+    expect(applyLaunchDefaults({ accountId: "1", objective: "traffic", autoUtm: false }).autoUtm).toBe(false);
+  });
+});
+
+describe("budget besar untuk kampanye", () => {
+  it("auditLaunchPlan memperingatkan budget per variasi yang terlalu tipis", async () => {
+    const { auditLaunchPlan } = await import("../src/meta/launch");
+    const ad = (n: number) => ({ adName: `V${n}`, creative: { type: "new" as const, imageHash: "h", primaryText: "Pangkas waktu desain katalog dari 2 jam jadi 5 menit, langsung pakai.", headline: "Paket AI", cta: "SHOP_NOW" as const } });
+    const thin = auditLaunchPlan({ objective: "sales", dailyBudget: 60000, ads: [1, 2, 3, 4, 5].map(ad) }, { targetCpa: 50000, line: "digital" });
+    expect(thin.find((x) => x.check === "Budget per Variasi")?.level).toBe("warn");
+    const ok = auditLaunchPlan({ objective: "sales", dailyBudget: 5_000_000, ads: [1, 2, 3, 4, 5].map(ad) }, { targetCpa: 50000, line: "digital" });
+    expect(ok.find((x) => x.check === "Budget per Variasi")).toBeUndefined();
+  });
+});

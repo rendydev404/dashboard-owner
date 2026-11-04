@@ -119,7 +119,7 @@ export interface BotAction {
   campaignName: string | null;
   action: string;
   params: Record<string, unknown>;
-  source: "chat" | "table" | "rule_engine";
+  source: "chat" | "table" | "rule_engine" | "autopilot";
   status: "pending" | "executed" | "failed" | "cancelled" | "expired" | "reverted";
   reason: string | null;
   error: string | null;
@@ -129,12 +129,142 @@ export interface BotAction {
 }
 export interface BotResp { actions: BotAction[]; nextCursor: string | null }
 
+/* ------------------------------------------------------------------ Autopilot Profit Engine */
+
+export interface ProductUnitEcon {
+  id: number;
+  line: Line;
+  name: string;
+  price: number | null;
+  cogs: number;
+  platformFeePct: number;
+  profitBeforeAds: number | null;
+  maxBreakEvenCpa: number | null;
+  breakEvenRoas: number | null;
+  sold30d: number;
+  revenue30d: number;
+  url: string | null;
+  assetCount: number;
+}
+
+export interface ProductAsset {
+  id: number;
+  productId: number;
+  productName: string;
+  line: Line;
+  accountId: string | null;
+  accountName: string | null;
+  name: string;
+  kind: "image" | "video" | "post";
+  imageHash: string | null;
+  imageUrl: string | null;
+  videoId: string | null;
+  thumbnailHash: string | null;
+  objectStoryId: string | null;
+  notes: string | null;
+  timesUsed: number;
+  active: boolean;
+  createdAt: string;
+}
+
+export interface AgentPlSnapshot {
+  todayNet: number;
+  todaySpend: number;
+  todayRevenue: number;
+  todayRoas: number;
+  net7d: number;
+  spend7d: number;
+  revenue7d: number;
+  roas7d: number;
+  beRoas7d: number;
+  cpa7d: number;
+  maxCpaBE7d: number;
+  cpl7d: number;
+  closeRate7d: number;
+  net30d: number;
+  roas30d: number;
+  activeDailyBudget: number;
+}
+
+export interface AgentDecisionLog {
+  kind: "pause_campaign" | "pause_ad" | "scale_campaign" | "inject_ads" | "launch_campaign" | "hold";
+  targetName: string;
+  campaignId?: string | null;
+  adId?: string | null;
+  productName?: string | null;
+  angle?: string | null;
+  rationale: string;
+  status: "executed" | "pending" | "blocked_guardrail" | "skipped" | "failed";
+  actionId?: number | null;
+  detail?: string | null;
+}
+
+export interface AgentRun {
+  id: number;
+  accountId: string;
+  accountName: string;
+  line: Line;
+  trigger: "sync" | "manual" | "chat";
+  mode: BotMode;
+  brain: "ai" | "deterministic";
+  status: "running" | "completed" | "halted_guardrail" | "failed";
+  plSnapshot: Partial<AgentPlSnapshot>;
+  diagnosis: string | null;
+  decisions: AgentDecisionLog[];
+  guardrailNote: string | null;
+  inputTokens: number | null;
+  outputTokens: number | null;
+  startedAt: string;
+  finishedAt: string | null;
+  error: string | null;
+}
+
+export interface AgentMemory {
+  id: number;
+  accountId: string;
+  accountName: string;
+  productId: number | null;
+  productName: string | null;
+  campaignId: string | null;
+  campaignName: string | null;
+  actionId: number | null;
+  angle: string;
+  headline: string | null;
+  hookSummary: string | null;
+  outcome: "testing" | "winning" | "losing" | "inconclusive";
+  metrics: { spend?: number; results?: number; cpa?: number | null; roas?: number };
+  lesson: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface AutopilotAccountSummary {
+  account: Account;
+  pl: AgentPlSnapshot;
+  activeCampaigns: number;
+  launchesToday: number;
+  stopLossTriggered: boolean;
+  rejectionCircuitOpen: boolean;
+  lastRunAt: string | null;
+  lastRunStatus: AgentRun["status"] | null;
+}
+
+export interface AutopilotResp {
+  accounts: AutopilotAccountSummary[];
+  products: ProductUnitEcon[];
+  assets: ProductAsset[];
+  runs: AgentRun[];
+  memories: AgentMemory[];
+  recentActions: BotAction[];
+}
+
 /** Event dari server (SSE /api/events). */
 export type ServerEvent =
   | { type: "version"; v: number }
   | { type: "sale"; amount: number; product: string }
   | { type: "sync"; status: string }
-  | { type: "action"; id: number; status: string };
+  | { type: "action"; id: number; status: string }
+  | { type: "autopilot"; accountId: string; status: string };
 
 /** Format angka di widget chat. */
 export type WidgetFormat = "rp" | "x" | "pct" | "num";
@@ -155,7 +285,6 @@ export type ChatWidget =
       items: { label: string; value: number; sub?: string; tone?: WidgetTone }[];
     };
 
-/** Event stream dari /api/chat. */
 /** Foto/video yang dilampirkan di chat. Filenya sementara di disk server (bukan database) sampai diterima Meta. */
 export interface ChatAttachment { id: string; kind: "image" | "video"; name: string; size: number; mime: string }
 

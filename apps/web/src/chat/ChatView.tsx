@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import {
   Send, Zap, Check, Undo2, Square, Maximize2, Minimize2, X, RotateCcw, Paperclip, Film,
   AlertCircle, BarChart3, Lightbulb, Flame, Clock3, Trophy, Wallet, Copy, RefreshCw,
-  ArrowUpRight, ArrowDown, ImagePlus, Layers, Sparkles, Rocket, ShieldCheck,
+  ArrowUpRight, ArrowDown, ImagePlus, Layers, Sparkles, Rocket, ShieldCheck, Loader2,
 } from "lucide-react";
 import { fmtRange, type BotAction } from "@iklan/shared";
 import { api, useBootstrap, actionsApi, refreshData, ApiError } from "../lib/api";
@@ -64,7 +64,7 @@ const TIPS = [
   "Tanya: “kampanye mana yang paling boros minggu ini?” untuk cek potensi kebocoran budget.",
   "Lampirkan atau drag-and-drop foto/video produk, nanti langsung dibuatkan draft iklan Meta Ads.",
   "Ketik “pindah ke akun jasa” atau “periode 30 hari”, filter dashboard otomatis ikut berubah.",
-  "Semua aksi pause, scale budget, atau tayang iklan selalu meminta konfirmasi lebih dulu.",
+  "Lampirkan foto/video lalu ketik “iklanin”, bot langsung menyusun & menayangkan iklannya. Ketik “review dulu” kalau mau cek rencananya sebelum tayang.",
 ];
 
 function ActionCard({ action }: { action: BotAction }) {
@@ -84,6 +84,7 @@ function ActionCard({ action }: { action: BotAction }) {
     setBusy(false);
   };
   const expired = action.status === "pending" && action.expiresAt && new Date(action.expiresAt) < new Date();
+  const auto = action.status === "pending" && Boolean(p.autoExecute);
   return (
     <div className="overflow-hidden rounded-2xl border border-line-strong bg-card text-[13px] shadow-card">
       <div className="flex items-center justify-between gap-2 border-b border-line bg-bg/60 px-4 py-2.5">
@@ -92,7 +93,7 @@ function ActionCard({ action }: { action: BotAction }) {
           {s.title.replace("?", "")}
         </p>
         <span className="pill bg-accent-soft text-[11px] text-accent">
-          <ShieldCheck size={12} /> Butuh Konfirmasi
+          <ShieldCheck size={12} /> {auto ? "Ditayangkan bot" : action.status === "pending" ? "Butuh Konfirmasi" : "Selesai"}
         </span>
       </div>
       <div className="p-4">
@@ -104,7 +105,11 @@ function ActionCard({ action }: { action: BotAction }) {
           </>
         )}
         {p.demo && <p className="mt-2 text-[11.5px] text-muted">Mode demo: perubahan hanya disimpan di database lokal dashboard.</p>}
-        {action.status === "pending" && !expired ? (
+        {auto ? (
+          <p className="mt-3 flex items-center gap-2 border-t border-line pt-2.5 text-[12px] font-semibold text-accent">
+            <Loader2 size={14} className="animate-spin" /> Membuat & menayangkan iklan di Meta…
+          </p>
+        ) : action.status === "pending" && !expired ? (
           <div className="mt-3.5 flex gap-2">
             <button className="btn btn-primary h-9 min-h-0 flex-1 rounded-xl" disabled={busy} onClick={() => run("confirm")}>
               <Check size={15} /> {busy && (action.action === "launch" || action.action === "add_ads") ? "Membuat iklan…" : "Ya, eksekusi sekarang"}

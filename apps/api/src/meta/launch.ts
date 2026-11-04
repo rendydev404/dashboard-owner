@@ -105,8 +105,6 @@ export interface LaunchResult {
 
 export interface PlanAuditItem { level: "ok" | "warn"; check: string; detail: string }
 
-const DEFAULT_MAX_DAILY = 1_000_000; // batas aman per peluncuran bila akun belum punya maxDailyBudget
-
 const job = (request: string) => ({ job: "create_and_launch_new_ads" as const, request });
 const idOf = (r: any, ...keys: string[]): string | null => {
   for (const k of keys) { const v = r?.[k]; if (v) return String(v); }
@@ -176,7 +174,7 @@ export function auditLaunchPlan(
   if (headlineWarn) {
     checks.push({ level: "warn", check: "Panjang Headline", detail: "Ada headline > 40 karakter yang berpotensi terpotong '...' di layar HP Feed/Reels." });
   } else if (ads.some((a) => a.creative.type === "new")) {
-    checks.push({ level: "ok", check: "Headline Mobile", detail: "Headline ≤ 40 karakter, aman tampil utuh di Feed & Reels." });
+    checks.push({ level: "ok", check: "Headline Mobile", detail: "Headline <= 40 karakter, aman tampil utuh di Feed & Reels." });
   }
 
   if (!hookOk) {
@@ -188,17 +186,25 @@ export function auditLaunchPlan(
   if (opts.dailyBudget && targetCpa && targetCpa > 0) {
     const ratio = opts.dailyBudget / targetCpa;
     const metricName = econ?.line === "jasa" ? "CPL" : "CPA";
+    // CBO butuh kira-kira ≥ 0,5× target per variasi supaya tiap kreatif sempat mendapat impresi untuk dinilai.
+    if (ads.length > 2 && opts.dailyBudget / ads.length < targetCpa * 0.5) {
+      checks.push({
+        level: "warn",
+        check: "Budget per Variasi",
+        detail: `${ads.length} variasi dengan budget ${Math.round(ratio * 10) / 10}x ${metricName}: sebagian kreatif hampir tidak kebagian spend. Naikkan budget ke ~${Math.ceil((targetCpa * ads.length * 0.5) / 5000) * 5}rb/hari atau kurangi variasi.`,
+      });
+    }
     if (ratio < 1) {
       checks.push({
         level: "warn",
         check: `Rasio Budget vs ${metricName}`,
-        detail: `Budget harian (${ Math.round(ratio * 10) / 10 }× batas ${metricName}) di bawah 1× target ${metricName}; sinyal konversi lebih lambat, wajib tahan minimal 3–5 hari sebelum evaluasi.`,
+        detail: `Budget harian (${Math.round(ratio * 10) / 10}x batas ${metricName}) di bawah 1x target ${metricName}; sinyal konversi lebih lambat, wajib tahan minimal 3-5 hari sebelum evaluasi.`,
       });
     } else {
       checks.push({
         level: "ok",
         check: `Rasio Budget vs ${metricName}`,
-        detail: `Budget setara ${Math.round(ratio * 10) / 10}× batas ${metricName} (~${Math.max(1, Math.round(ratio))} target hasil/hari).`,
+        detail: `Budget setara ${Math.round(ratio * 10) / 10}x batas ${metricName} (~${Math.max(1, Math.round(ratio))} target hasil/hari).`,
       });
     }
   }
@@ -218,7 +224,7 @@ function validateCreativeItem(c: CreativeSpec, objective: (typeof LAUNCH_OBJECTI
   }
 }
 
-/** Info akun untuk guardrail: nama, lini, minimal budget harian dari Meta, batas maksimal dari aturan akun. */
+/** Info akun untuk guardrail: nama, lini, minimal budget harian dari Meta, dan batas maksimal HANYA bila owner mengaturnya. */
 async function accountLimits(accountId: string, cfg: Config) {
   const acc = cfg.accounts.find((a) => a.id === accountId && a.active);
   if (!acc) throw new Error("Akun iklan tidak terdaftar di dashboard atau tidak aktif. Tanyakan ke user akun yang mana.");
@@ -228,22 +234,59 @@ async function accountLimits(accountId: string, cfg: Config) {
     const row = (unwrap<any[]>(r.ad_accounts) ?? []).find((x: any) => String(x.ad_account_id) === accountId);
     minDaily = Number(row?.min_daily_budget_cents ?? 0);
   } catch { /* minimal budget tetap divalidasi Meta saat publish */ }
-  return { acc, minDaily, maxDaily: acc.settings.maxDailyBudget ?? DEFAULT_MAX_DAILY };
+  return { acc, minDaily, maxDaily: acc.settings.maxDailyBudget || null };
+}
+
+type Objective = (typeof LAUNCH_OBJECTIVES)[number];
+const DEFAULT_CTA: Record<Objective, (typeof LAUNCH_CTAS)[number]> = {
+  sales: "SHOP_NOW", leads_website: "SIGN_UP", leads_whatsapp: "WHATSAPP_MESSAGE", traffic: "LEARN_MORE",
+};
+
+/** Page/IG/Pixel per akun dari get_launch_context terakhir, supaya rencana yang tidak menyebutnya tetap lengkap. */
+const assetCache = new Map<string, { at: number; pageIds: string[]; igIds: string[]; pixelIds: string[] }>();
+const ASSET_TTL = 30 * 60_000;
+const idsOf = (rows: unknown, ...keys: string[]) =>
+  (Array.isArray(rows) ? rows : [])
+    .map((r: any) => { for (const k of keys) if (r?.[k]) return String(r[k]); return ""; })
+    .filter((x) => /^\d+$/.test(x));
+
+/**
+ * Lengkapi rencana dengan default best practice sebelum divalidasi: Page/IG/Pixel kalau akun hanya punya satu,
+ * autoUtm untuk iklan website, dan CTA yang cocok dengan tujuan (bukan menolak rencana karena CTA salah pasang).
+ */
+export function applyLaunchDefaults<T>(raw: T): T {
+  if (!raw || typeof raw !== "object") return raw;
+  const p: any = { ...raw };
+  const obj = (LAUNCH_OBJECTIVES as readonly string[]).includes(p.objective) ? (p.objective as Objective) : undefined;
+  const a = p.accountId ? assetCache.get(String(p.accountId)) : undefined;
+  if (a && Date.now() - a.at < ASSET_TTL) {
+    if (!p.pageId && a.pageIds.length === 1) p.pageId = a.pageIds[0];
+    if (!p.instagramUserId && a.igIds.length === 1) p.instagramUserId = a.igIds[0];
+    if (!p.pixelId && (obj === "sales" || obj === "leads_website") && a.pixelIds.length === 1) p.pixelId = a.pixelIds[0];
+  }
+  if (p.autoUtm === undefined && obj && obj !== "leads_whatsapp") p.autoUtm = true;
+  const fixCta = (c: any) => {
+    if (!obj || !c || typeof c !== "object" || c.type !== "new") return c;
+    return !c.cta || (obj === "leads_whatsapp") !== (c.cta === "WHATSAPP_MESSAGE") ? { ...c, cta: DEFAULT_CTA[obj] } : c;
+  };
+  if (p.creative) p.creative = fixCta(p.creative);
+  if (Array.isArray(p.ads)) p.ads = p.ads.map((it: any) => (it && typeof it === "object" ? { ...it, creative: fixCta(it.creative) } : it));
+  return p;
 }
 
 /** Validasi rencana sebelum kartu konfirmasi dibuat. Pesan error ditujukan ke model supaya bisa bertanya/memperbaiki. */
 export async function validateLaunchPlan(raw: unknown): Promise<{
-  plan: LaunchPlan; accountName: string; minDaily: number; maxDaily: number; audit: PlanAuditItem[];
+  plan: LaunchPlan; accountName: string; minDaily: number; maxDaily: number | null; audit: PlanAuditItem[];
 }> {
   if (metaMode() !== "mcp") throw new Error("Peluncuran iklan butuh jalur MCP Meta (login Claude Code di VPS). Jalur Graph API belum mendukung pembuatan iklan.");
-  const parsed = launchPlanSchema.safeParse(raw);
+  const parsed = launchPlanSchema.safeParse(applyLaunchDefaults(raw));
   if (!parsed.success) throw new Error("Rencana belum lengkap/valid: " + JSON.stringify(parsed.error.flatten().fieldErrors));
   const plan = parsed.data;
   const cfg = await loadConfig();
   const { acc, minDaily, maxDaily } = await accountLimits(plan.accountId, cfg);
   if (plan.dailyBudget < minDaily) throw new Error(`Budget harian minimal akun ini Rp${minDaily.toLocaleString("id-ID")}.`);
-  if (plan.dailyBudget > maxDaily) throw new Error(`Budget harian melebihi batas aman Rp${maxDaily.toLocaleString("id-ID")}/hari. Minta user menaikkan "budget harian maksimal" di Pengaturan akun kalau memang mau lebih.`);
-  if (plan.targeting.ageMin > plan.targeting.ageMax) throw new Error("ageMin harus ≤ ageMax");
+  if (maxDaily != null && plan.dailyBudget > maxDaily) throw new Error(`Budget harian melebihi batas yang owner atur sendiri (Rp${maxDaily.toLocaleString("id-ID")}/hari) di Pengaturan akun. Pakai budget ≤ batas itu, atau minta owner mengosongkan batasnya.`);
+  if (plan.targeting.ageMin > plan.targeting.ageMax) throw new Error("ageMin harus <= ageMax");
   if ((plan.objective === "sales" || plan.objective === "leads_website") && !plan.pixelId) {
     throw new Error("Tujuan ini butuh pixel (dataset) untuk mengukur konversi. Ambil dari get_launch_context.");
   }
@@ -259,7 +302,7 @@ export async function validateAddAdsPlan(raw: unknown): Promise<{
   plan: AddAdsPlan; accountName: string; campaignName: string; adsetId: string; adsetName: string; audit: PlanAuditItem[];
 }> {
   if (metaMode() !== "mcp") throw new Error("Penambahan iklan butuh jalur MCP Meta (login Claude Code di VPS).");
-  const parsed = addAdsPlanSchema.safeParse(raw);
+  const parsed = addAdsPlanSchema.safeParse(applyLaunchDefaults(raw));
   if (!parsed.success) throw new Error("Rencana tambah iklan belum lengkap/valid: " + JSON.stringify(parsed.error.flatten().fieldErrors));
   const plan = parsed.data;
   const cfg = await loadConfig();
@@ -424,6 +467,38 @@ export async function launchContext(accountId: string) {
       }))
     : [];
 
+  const pageList = unwrap((pages as any).pages ?? (pages as any).data ?? pages);
+  const igList = unwrap((ig as any).ig_accounts ?? (ig as any).instagram_accounts ?? (ig as any).data ?? ig);
+  const pixelList = unwrap((datasets as any).datasets ?? (datasets as any).data ?? datasets);
+  assetCache.set(accountId, {
+    at: Date.now(),
+    pageIds: idsOf(pageList, "id", "page_id"),
+    igIds: idsOf(igList, "id", "instagram_user_id", "ig_user_id"),
+    pixelIds: idsOf(pixelList, "id", "dataset_id", "pixel_id"),
+  });
+
+  // Budget best practice dihitung di server (bukan ditebak model): basis = batas CPA/CPL akun, atau CPA impas produk terlaris.
+  const round5k = (n: number) => Math.ceil(n / 5000) * 5000;
+  const basisProduct = products.find((p) => p.maxBreakEvenCpa);
+  const basisCpa = targetCpa > 0 ? targetCpa : basisProduct?.maxBreakEvenCpa ?? 0;
+  const proven = Boolean(k30 && k30.roas >= acc.settings.targetRoas && winningAds30d.length > 0);
+  const testing = (n: number) => round5k(Math.max(minDaily, basisCpa * Math.max(2, n * 0.75)));
+  const learningExit = round5k(Math.max(minDaily, (basisCpa * 50) / 7));
+  const budgetGuide = basisCpa > 0 ? {
+    basisCpa: Math.round(basisCpa),
+    basis: targetCpa > 0 ? `batas ${acc.line === "jasa" ? "CPL" : "CPA"} akun` : `CPA impas ${basisProduct!.name}`,
+    testing1Ad: testing(1),
+    testing3Variations: testing(3),
+    testing5Variations: testing(5),
+    learningPhaseExit: learningExit,
+    accountProven: proven,
+    recommended: proven ? Math.max(learningExit, testing(3)) : testing(3),
+    note: (maxDaily ? `Owner membatasi maks ${maxDaily.toLocaleString("id-ID")}/hari. ` : "Tidak ada batas atas budget dari dashboard. ") +
+      (proven
+        ? "Akun terbukti profit (ROAS riil ≥ target & ada iklan pemenang): langsung pakai budget keluar learning phase supaya cepat dapat ~50 konversi/minggu."
+        : "Akun belum terbukti profit di 30 hari terakhir: mulai di budget testing, scale +20–30% per 2–3 hari setelah CPA di bawah batas."),
+  } : null;
+
   return {
     account: {
       id: acc.id,
@@ -447,14 +522,15 @@ export async function launchContext(accountId: string) {
       recommendedTestingDailyBudget: targetCpa > 0 ? Math.max(minDaily, Math.round(targetCpa * 2)) : null,
       learningPhaseExitDailyBudget: targetCpa > 0 ? Math.max(minDaily, Math.ceil((targetCpa * 50) / 7)) : null,
     } : null,
+    budgetGuide,
     bestHours30d: hourly30?.best.slice(0, 3).map((h) => ({
       hour: `${String(h.hour).padStart(2, "0")}:00`,
       results: h.results,
       costPerResult: h.cost ? Math.round(h.cost) : null,
     })) ?? [],
-    pages: unwrap((pages as any).pages ?? (pages as any).data ?? pages),
-    instagramAccounts: unwrap((ig as any).ig_accounts ?? (ig as any).instagram_accounts ?? (ig as any).data ?? ig),
-    pixels: unwrap((datasets as any).datasets ?? (datasets as any).data ?? datasets),
+    pages: pageList,
+    instagramAccounts: igList,
+    pixels: pixelList,
     existingCreatives: unwrap((creatives as any).ad_creatives ?? (creatives as any).creatives ?? creatives),
     activeAdsets,
     winningAds30d,

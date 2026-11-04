@@ -1,6 +1,6 @@
-import { useEffect, useRef, useState, useSyncExternalStore, type ReactNode } from "react";
+import { useEffect, useId, useLayoutEffect, useRef, useState, useSyncExternalStore, type ReactNode } from "react";
 import { createPortal } from "react-dom";
-import { AlertCircle, CheckCircle2, Info, RotateCw, X, ArrowUp, ArrowDown } from "lucide-react";
+import { AlertCircle, CheckCircle2, Info, RotateCw, X, ArrowUp, ArrowDown, ChevronDown, Check } from "lucide-react";
 import { dec } from "@iklan/shared";
 
 export const cx = (...a: (string | false | 0 | null | undefined)[]) => a.filter(Boolean).join(" ");
@@ -59,6 +59,191 @@ export function Delta({ cur, prev, goodUp, className }: { cur: number; prev: num
   );
 }
 
+/* ------------------------------------------------------------------ custom controls (tanpa kontrol native browser) */
+
+export interface SelectOption<T extends string = string> {
+  value: T;
+  label: string;
+  hint?: string;
+}
+
+export function CustomSelect<T extends string = string>({
+  value,
+  onChange,
+  options,
+  placeholder = "Pilih opsi",
+  className,
+  ariaLabel,
+  disabled,
+}: {
+  value: T;
+  onChange: (value: T) => void;
+  options: readonly SelectOption<T>[];
+  placeholder?: string;
+  className?: string;
+  ariaLabel?: string;
+  disabled?: boolean;
+}) {
+  const [open, setOpen] = useState(false);
+  const btnRef = useRef<HTMLButtonElement>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
+  const listboxId = useId();
+  const [pos, setPos] = useState<{ top: number; left: number; width: number }>({ top: 0, left: 0, width: 220 });
+
+  const selected = options.find((o) => o.value === value);
+
+  useLayoutEffect(() => {
+    if (!open || !btnRef.current) return;
+    const updatePos = () => {
+      const el = btnRef.current;
+      if (!el) return;
+      const r = el.getBoundingClientRect();
+      const maxH = Math.min(options.length * 44 + 12, 280);
+      const spaceBelow = window.innerHeight - r.bottom - 12;
+      const top = spaceBelow < maxH && r.top > maxH ? Math.max(8, r.top - maxH - 6) : r.bottom + 6;
+      setPos({ top, left: Math.max(8, Math.min(r.left, window.innerWidth - r.width - 8)), width: Math.max(r.width, 180) });
+    };
+    updatePos();
+    window.addEventListener("resize", updatePos);
+    window.addEventListener("scroll", updatePos, true);
+    return () => {
+      window.removeEventListener("resize", updatePos);
+      window.removeEventListener("scroll", updatePos, true);
+    };
+  }, [open, options.length]);
+
+  useEffect(() => {
+    if (!open) return;
+    const onDown = (e: MouseEvent) => {
+      const t = e.target as Node;
+      if (btnRef.current?.contains(t) || menuRef.current?.contains(t)) return;
+      setOpen(false);
+    };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") { setOpen(false); btnRef.current?.focus(); }
+    };
+    document.addEventListener("mousedown", onDown);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("mousedown", onDown);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [open]);
+
+  return (
+    <>
+      <button
+        ref={btnRef}
+        type="button"
+        disabled={disabled}
+        aria-label={ariaLabel}
+        aria-haspopup="listbox"
+        aria-expanded={open}
+        aria-controls={open ? listboxId : undefined}
+        onClick={() => !disabled && setOpen((o) => !o)}
+        onKeyDown={(e) => {
+          if (disabled) return;
+          if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+            e.preventDefault();
+            if (!open) { setOpen(true); return; }
+            const idx = Math.max(0, options.findIndex((o) => o.value === value));
+            const next = options[(idx + (e.key === "ArrowDown" ? 1 : options.length - 1)) % options.length];
+            if (next) onChange(next.value);
+          }
+        }}
+        className={cx(
+          "input flex items-center justify-between gap-2 text-left transition-colors",
+          disabled ? "cursor-not-allowed opacity-50" : "cursor-pointer hover:border-muted-2",
+          open && "border-accent",
+          className,
+        )}
+      >
+        <span className={cx("truncate text-[13.5px]", selected ? "text-ink" : "text-muted")}>
+          {selected ? selected.label : placeholder}
+        </span>
+        <ChevronDown size={16} className={cx("shrink-0 text-muted transition-transform", open && "rotate-180")} />
+      </button>
+      {open && createPortal(
+        <div
+          ref={menuRef}
+          id={listboxId}
+          role="listbox"
+          style={{ position: "fixed", top: pos.top, left: pos.left, width: pos.width }}
+          className="pop-in z-[80] max-h-[280px] overflow-y-auto rounded-xl border border-line-strong bg-card p-1.5 shadow-pop"
+        >
+          {options.map((opt) => {
+            const active = opt.value === value;
+            return (
+              <button
+                key={opt.value}
+                type="button"
+                role="option"
+                aria-selected={active}
+                onClick={() => { onChange(opt.value); setOpen(false); btnRef.current?.focus(); }}
+                className={cx(
+                  "flex w-full items-center justify-between gap-2 rounded-lg px-3 py-2 text-left text-[13px] transition-colors",
+                  active ? "bg-accent-soft font-semibold text-accent" : "text-ink hover:bg-hover",
+                )}
+              >
+                <span className="min-w-0 flex-1">
+                  <span className="block truncate">{opt.label}</span>
+                  {opt.hint && <span className="block truncate text-[11.5px] font-normal text-muted">{opt.hint}</span>}
+                </span>
+                {active && <Check size={15} className="shrink-0 text-accent" />}
+              </button>
+            );
+          })}
+        </div>,
+        document.body,
+      )}
+    </>
+  );
+}
+
+export function CustomSwitch({
+  checked,
+  onChange,
+  label,
+  hint,
+  disabled,
+}: {
+  checked: boolean;
+  onChange: (next: boolean) => void;
+  label?: ReactNode;
+  hint?: ReactNode;
+  disabled?: boolean;
+}) {
+  return (
+    <div className={cx("flex items-center justify-between gap-3", disabled && "opacity-50")}>
+      {(label || hint) && (
+        <div className="min-w-0">
+          {label && <p className="text-[13.5px] font-medium leading-snug text-ink">{label}</p>}
+          {hint && <p className="text-[12px] text-muted">{hint}</p>}
+        </div>
+      )}
+      <button
+        type="button"
+        role="switch"
+        aria-checked={checked}
+        disabled={disabled}
+        onClick={() => !disabled && onChange(!checked)}
+        className={cx(
+          "relative inline-flex h-6 w-11 shrink-0 cursor-pointer items-center rounded-full border transition-colors",
+          checked ? "border-accent bg-accent" : "border-line-strong bg-track",
+          disabled && "cursor-not-allowed",
+        )}
+      >
+        <span
+          className={cx(
+            "inline-block size-4 rounded-full bg-card transition-transform",
+            checked ? "translate-x-5" : "translate-x-0.5",
+          )}
+        />
+      </button>
+    </div>
+  );
+}
+
 /* ------------------------------------------------------------------ toast */
 
 type ToastT = { id: number; text: string; tone: "ok" | "err" | "info"; action?: { label: string; run: () => void } };
@@ -101,7 +286,7 @@ export function Modal({ open, onClose, title, children, wide }: { open: boolean;
     const prev = document.activeElement as HTMLElement | null;
     const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
     document.addEventListener("keydown", onKey);
-    ref.current?.querySelector<HTMLElement>("button, input, select")?.focus();
+    ref.current?.querySelector<HTMLElement>("button, input")?.focus();
     return () => { document.removeEventListener("keydown", onKey); prev?.focus(); };
   }, [open, onClose]);
   if (!open) return null;
@@ -151,5 +336,3 @@ export function useMediaQuery(q: string) {
   }, [q]);
   return m;
 }
-
-/** Render ringan untuk teks bot: **tebal**, daftar "- ", baris baru. Tanpa HTML mentah (aman dari XSS). */

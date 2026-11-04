@@ -19,7 +19,8 @@ export function loadConfig(): Promise<Config> {
     const [accounts, products, fixedCosts, lineSettings] = await Promise.all([
       sql`
         SELECT a.id, a.display_name, a.line, a.result_action_type, a.bot_mode, a.active, a.timezone, a.last_synced_at,
-               s.target_roas, s.max_cpa, s.max_cpl, s.ad_tax_pct, s.scale_step_pct, s.kill_after_spend, s.max_daily_budget
+               s.target_roas, s.max_cpa, s.max_cpl, s.ad_tax_pct, s.scale_step_pct, s.kill_after_spend, s.max_daily_budget,
+               s.daily_stop_loss, s.max_account_daily_budget, s.cooldown_hours, s.max_auto_launches_per_day, s.auto_launch_enabled
         FROM ad_accounts a JOIN account_settings s ON s.account_id = a.id
         ORDER BY a.sort_order, a.display_name`,
       sql`SELECT id, line, name, price, cogs, url, active FROM products ORDER BY line, name`,
@@ -33,6 +34,11 @@ export function loadConfig(): Promise<Config> {
         settings: {
           targetRoas: r.target_roas, maxCpa: r.max_cpa, maxCpl: r.max_cpl, adTaxPct: r.ad_tax_pct,
           scaleStepPct: r.scale_step_pct, killAfterSpend: r.kill_after_spend, maxDailyBudget: r.max_daily_budget,
+          dailyStopLoss: r.daily_stop_loss ?? null,
+          maxAccountDailyBudget: r.max_account_daily_budget ?? null,
+          cooldownHours: Number(r.cooldown_hours ?? 6),
+          maxAutoLaunchesPerDay: Number(r.max_auto_launches_per_day ?? 2),
+          autoLaunchEnabled: r.auto_launch_enabled ?? true,
         },
       })),
       products: products.map((r) => ({ id: Number(r.id), line: r.line, name: r.name, price: r.price, cogs: r.cogs, url: r.url, active: r.active })),

@@ -1,4 +1,4 @@
-// Aturan rekomendasi bot per kampanye (PRD F8).
+// Aturan rekomendasi bot per kampanye (PRD F8) + guardrail keselamatan Autopilot Profit Engine.
 import { div, type Line } from "./metrics";
 
 export interface AccountSettings {
@@ -9,11 +9,22 @@ export interface AccountSettings {
   scaleStepPct: number;
   killAfterSpend: number;
   maxDailyBudget: number | null;
+  dailyStopLoss: number | null;
+  maxAccountDailyBudget: number | null;
+  cooldownHours: number;
+  maxAutoLaunchesPerDay: number;
+  autoLaunchEnabled: boolean;
 }
 
 export const DEFAULT_SETTINGS: Record<Line, AccountSettings> = {
-  digital: { targetRoas: 2.5, maxCpa: 45000, maxCpl: null, adTaxPct: 3, scaleStepPct: 20, killAfterSpend: 100000, maxDailyBudget: null },
-  jasa: { targetRoas: 4, maxCpa: 1500000, maxCpl: 60000, adTaxPct: 3, scaleStepPct: 20, killAfterSpend: 300000, maxDailyBudget: null },
+  digital: {
+    targetRoas: 2.5, maxCpa: 45000, maxCpl: null, adTaxPct: 3, scaleStepPct: 20, killAfterSpend: 100000, maxDailyBudget: null,
+    dailyStopLoss: 300000, maxAccountDailyBudget: null, cooldownHours: 6, maxAutoLaunchesPerDay: 2, autoLaunchEnabled: true,
+  },
+  jasa: {
+    targetRoas: 4, maxCpa: 1500000, maxCpl: 60000, adTaxPct: 3, scaleStepPct: 20, killAfterSpend: 300000, maxDailyBudget: null,
+    dailyStopLoss: 500000, maxAccountDailyBudget: null, cooldownHours: 6, maxAutoLaunchesPerDay: 2, autoLaunchEnabled: true,
+  },
 };
 
 export type RecCode = "inactive" | "kill" | "scale" | "creative" | "keep";

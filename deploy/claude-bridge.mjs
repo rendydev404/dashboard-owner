@@ -13,7 +13,7 @@ const PORT = Number(process.env.BRIDGE_PORT || 8790);
 const TOKEN = process.env.BRIDGE_TOKEN || "";
 const CLAUDE = process.env.CLAUDE_BIN || `${process.env.HOME}/.local/bin/claude`;
 const MAX_CONCURRENT = Number(process.env.BRIDGE_MAX_CONCURRENT || 2);
-const TIMEOUT_MS = Number(process.env.BRIDGE_TIMEOUT_MS || 170_000);
+const TIMEOUT_MS = Number(process.env.BRIDGE_TIMEOUT_MS || 300_000); // cukup untuk alur lampiran → iklan tayang dalam satu giliran
 const WORKDIR = process.env.BRIDGE_WORKDIR || `${process.env.HOME}/bridge-cwd`; // folder kosong: tanpa CLAUDE.md/proyek
 if (TOKEN.length < 24) { console.error("BRIDGE_TOKEN wajib (min. 24 karakter)"); process.exit(1); }
 mkdirSync(WORKDIR, { recursive: true });
